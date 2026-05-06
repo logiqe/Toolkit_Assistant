@@ -29,7 +29,7 @@
 
     <script>
         const urlParams = new URLSearchParams(window.location.search);
-        const boardId = urlParams.get('id') || urlParams.get('board_id');
+        let boardId = urlParams.get('board_id');
 
         if (!boardId) {
             console.error("No board id detected");
