@@ -13,6 +13,14 @@ app = FastAPI()
 
 sessions = {}
 
+def save_logs_to_file():
+    try:
+        with open("test_participants_logs.json", "w", encoding="utf-8") as f:
+            json.dump(sessions, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des logs : {e}")
+
+
 def get_session(board_id: str):
     """Récupère ou crée une session isolée pour une carte donnée"""
     if board_id not in sessions:
@@ -109,4 +117,11 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
     # 5. Sauvegarder la réponse de l'IA
     session["history"].append({"sender": "ai", "text": texte_ia})
 
+    save_logs_to_file()
+
     return {"reply": texte_ia}
+
+@app.get("/admin/logs")
+async def get_all_logs():
+    """Affiche tous les messages de tous les participants"""
+    return sessions
