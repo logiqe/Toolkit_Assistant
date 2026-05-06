@@ -119,7 +119,10 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
 
     save_logs_to_file()
 
-    return {"reply": texte_ia}
+    return {
+        "reply": texte_ia,
+        "MQTT_value": valeurs_mqtt
+    }
 
 @app.get("/admin/logs")
 async def get_all_logs():
