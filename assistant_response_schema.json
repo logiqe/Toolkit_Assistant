@@ -1,0 +1,262 @@
+{
+  "type": "object",
+  "required": ["answer", "MQTT_value"],
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "type": "string"
+    },
+    "MQTT_value": {
+      "type": "object",
+      "required": ["version", "command", "animation_speed", "hardware_config","rules", "mappings", "default_actions"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "number",
+          "enum": [1]
+        },
+        "command": {
+          "type": "string",
+          "enum": [
+            "",
+            "calibrate_light",
+            "calibrate_temperature",
+            "calibrate_distance"
+          ]
+        },
+        "animation_speed": {
+          "type": "number",
+          "minimum": 0.02,
+          "maximum": 5
+        },
+        "hardware_config": {
+          "$ref": "#/$defs/hardware_config"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mapping"
+          }
+        },
+        "default_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "hardware_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputs", "outputs"],
+      "properties": {
+        "inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["touch", "light", "temperature", "distance"],
+          "properties": {
+            "touch": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "light": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "temperature": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "distance": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+          }
+        },
+        "outputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["led1", "led2", "piezo", "servo"],
+          "properties": {
+            "led1": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "led2": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "piezo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "servo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["label", "priority", "condition_logic", "checks", "actions"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "condition_logic": {
+          "type": "string",
+          "enum": ["AND", "OR"]
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/action"
+          }
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "required": ["input", "op", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "string",
+          "enum": ["touch", "light", "temperature", "distance"]
+        },
+        "op": {
+          "type": "string",
+          "enum": ["<", ">", "<=", ">=", "==", "!="]
+        },
+        "value": {
+          "type": "number"
+        }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["output", "values", "frequencies", "volume", "angle"],
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "type": "string",
+          "enum": ["led1", "led2", "piezo", "servo"]
+        },
+        "values": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "minItems": 4,
+                "maxItems": 4,
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frequencies": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "angle": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 180
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "required": [
+        "label",
+        "input",
+        "in_min",
+        "in_max",
+        "output",
+        "out_min",
+        "out_max",
+        "output_channel"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string" },
+        "input": {
+          "type": "string",
+          "enum": ["touch", "light", "temperature", "distance"]
+        },
+        "in_min": { "type": "number" },
+        "in_max": { "type": "number" },
+        "output": {
+          "type": "string",
+          "enum": [
+            "led1",
+            "led2",
+            "piezo_frequency",
+            "piezo_volume",
+            "animation_speed",
+            "servo"
+          ]
+        },
+        "out_min": { "type": "number" },
+        "out_max": { "type": "number" },
+        "output_channel": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "description": "0=R, 1=G, 2=B, 3=W, 4=Brightness"
+        }
+      }
+    },
+    "hw_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "pin", "port"],
+      "properties": {
+        "type": { "type": "string" },
+        "pin": { 
+          "anyOf": [ { "type": "string" }, { "type": "null" } ] 
+        },
+        "port": { 
+          "anyOf": [ { "type": "string" }, { "type": "null" } ] 
+        }
+      }
+    }
+  }
+}
