@@ -1,7 +1,25 @@
-# Byte-compiled / optimized / DLL files
+# Environment configuration
+.env
+.env.*
+!.env.example
+
+# Python artifacts
 __pycache__/
-*.py[codz]
+*.py[cod]
+*.pyo
+*.pyd
 *$py.class
+*.so
+
+# Logs and runtime state
+*.log
+assistant_state.json
+
+# macOS
+.DS_Store
+
+# Editor settings
+.vscode/
 
 # C extensions
 *.so
