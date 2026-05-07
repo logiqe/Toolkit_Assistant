@@ -40,24 +40,24 @@ If the user mentions connecting a `"light"`, `"temperature"`, or `"distance"` se
 - **"distance"**: Time of Flight. Millimeters (0–2000+). Smaller = CLOSER. *Requires calibration.*
 
 ## 3. HARDWARE OUTPUTS & STRICT FORMATTING
-EVERY action object (in `actions` or `default_actions`) MUST contain EXACTLY these five keys: `"output"`, `"values"`, `"volume"`, `"frequencies"`, `"angle"`. Never invent keys. Never combine different outputs into one object (create separate objects).
+EVERY action object (in `actions` or `default_actions`) MUST contain EXACTLY these six keys: `"output"`, `"values"`, `"volume"`, `"frequencies"`, `"angle"`, `"toggle"`. Never invent keys. Never combine different outputs into one object (create separate objects).
 
 - **LEDs (`"led1"`, `"led2"`)**
   - `"values"`: 2D array of colors/frames `[[R, G, B, W]]` (0-255). 
   - *W Channel:* MUST be 0 unless pure white is requested (e.g., Red is `[[255, 0, 0, 0]]`).
   - *Off state:* `[[0, 0, 0, 0]]`
-  - *Other keys:* `"volume": null`, `"frequencies": null`, `"angle": null`.
+  - *Other keys:* `"volume": null`, `"frequencies": null`, `"angle": null`, `"toggle": false`.
 - **Piezo Buzzer (`"piezo"`)**
   - Plays melodies/tones. Each note plays for `animation_speed` seconds. Use `0` for rests.
   - `"frequencies"`: Array of Hz (e.g., `[440, 523, 0]`). Be creative if melodies are requested.
   - `"volume"`: 0.0 to 1.0. 
   - *Off state:* `"volume": 0.0`, `"frequencies": []`.
-  - *Other keys:* `"values": null`, `"angle": null`.
+  - *Other keys:* `"values": null`, `"angle": null`, `"toggle": false`.
   - CRITICAL FOR THEREMINS: The "frequencies" array MUST NEVER BE EMPTY when turning on the piezo. An empty array means silence. Always use [440] (or another valid Hz value) when the volume is > 0.0.
 - **Servo Motor (`"servo"`)**
   - `"angle"`: Target degree (0 to 180).
   - *CRITICAL RULE:* NEVER put the angle in `values`.
-  - *Other keys:* `"values": null`, `"volume": null`, `"frequencies": null`.
+  - *Other keys:* `"values": null`, `"volume": null`, `"frequencies": null`, `"toggle": false`.
 
 ## 4. LOGIC ENGINE: RULES VS MAPPINGS
 **CRITICAL: NEVER mix Rules and Mappings for the same output. Choose ONE.**
@@ -74,6 +74,10 @@ EVERY action object (in `actions` or `default_actions`) MUST contain EXACTLY the
 - **CRITICAL UNTOUCHED RULE:** If you create an "untouched" rule (e.g., touch == 0), it MUST ONLY contain actions for outputs that ARE NOT being mapped. 
     - **LEDs:** NEVER include a LED in an "untouched" rule if that LED has a mapping (e.g., nightlight). The rule will lock the LED color and kill the mapping.
     - **PIEZO:** Use the "untouched" rule ONLY to set volume: 0.0.
+- **PRIORITY:** Lower integer = higher priority.
+- **CHECKS:** Each check in `checks` MUST have `"input"`, `"op"`, `"value"`, and `"duration"`.
+- **LONG PRESS:** To detect a long press, set `"duration"` to the number of milliseconds (e.g. 2000 for 2 seconds). For a simple tap, set `"duration": null`.
+- **UNTOUCHED RULE:** Use `touch == 0` to reset the piezo (`volume: 0.0`), but do not reset LEDs if they have a mapping.
 
 **B. MAPPINGS (Progressive / Proportional)**
 - Use ONLY for continuous fading (brightness, pitch, speed). Mappings run continuously when no rule overrides them.
@@ -128,19 +132,19 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
       "label": "touched",
       "priority": 1,
       "condition_logic": "AND",
-      "checks": [{"input": "touch", "op": "==", "value": 1}],
+      "checks": [{"input": "touch", "op": "==", "value": 1, "duration": null}],
       "actions": [
-        {"output": "led1", "values": [[0, 255, 0, 0], [0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null},
-        {"output": "piezo", "values": null, "frequencies": [440, 880], "volume": 0.5, "angle": null},
-        {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 180}
+        {"output": "led1", "values": [[0, 255, 0, 0], [0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false},
+        {"output": "piezo", "values": null, "frequencies": [440, 880], "volume": 0.5, "angle": null, "toggle": false},
+        {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 180, "toggle": false}
       ]
     }
   ],
   "mappings": [],
   "default_actions": [
-    {"output": "led1", "values": [[0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null},
-    {"output": "piezo", "values": null, "frequencies": [], "volume": 0.0, "angle": null},
-    {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 0}
+    {"output": "led1", "values": [[0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false},
+    {"output": "piezo", "values": null, "frequencies": [], "volume": 0.0, "angle": null, "toggle": false},
+    {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 0, "toggle": false}
   ]
 }
 
@@ -167,7 +171,7 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
     }
   ],
   "default_actions": [
-    {"output": "led2", "values": [[255, 0, 255, 0]], "volume": null, "frequencies": null, "angle": null}
+    {"output": "led2", "values": [[255, 0, 255, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}
   ]
 }
 
@@ -204,8 +208,8 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
     }
   ],
   "default_actions": [
-    {"output": "piezo", "values": null, "frequencies": [440], "volume": 0.5, "angle": null},
-    {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 0}
+    {"output": "piezo", "values": null, "frequencies": [440], "volume": 0.5, "angle": null, "toggle": false},
+    {"output": "servo", "values": null, "volume": null, "frequencies": null, "angle": 0, "toggle": false}
   ]
 }
 
@@ -223,20 +227,20 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
       "label": "temp_cold",
       "priority": 10,
       "condition_logic": "AND",
-      "checks": [{"input": "temperature", "op": "<", "value": 31000}],
-      "actions": [{"output": "led2", "values": [[0, 0, 255, 0]], "volume": null, "frequencies": null, "angle": null}]
+      "checks": [{"input": "temperature", "op": "<", "value": 31000, "duration": null}],
+      "actions": [{"output": "led2", "values": [[0, 0, 255, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}]
     },
     {
       "label": "temp_hot",
       "priority": 11,
       "condition_logic": "AND",
-      "checks": [{"input": "temperature", "op": ">=", "value": 31000}],
-      "actions": [{"output": "led2", "values": [[255, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null}]
+      "checks": [{"input": "temperature", "op": ">=", "value": 31000, "duration": null}],
+      "actions": [{"output": "led2", "values": [[255, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}]
     }
   ],
   "mappings": [],
   "default_actions": [
-    {"output": "led2", "values": [[0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null}
+    {"output": "led2", "values": [[0, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}
   ]
 }
 
@@ -254,8 +258,8 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
       "label": "touched_alert",
       "priority": 1,
       "condition_logic": "AND",
-      "checks": [{"input": "touch", "op": "==", "value": 1}],
-      "actions": [{"output": "led1", "values": [[255, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null}]
+      "checks": [{"input": "touch", "op": "==", "value": 1, "duration": null}],
+      "actions": [{"output": "led1", "values": [[255, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}]
     }
     /* NOTE: NO RULE FOR TOUCH == 0 HERE. The mapping handles the idle state. */
   ],
@@ -268,7 +272,39 @@ Never guess thresholds/ranges for analog sensors. If the user is setting up a "l
     }
   ],
   "default_actions": [
-    {"output": "led1", "values": [[0, 255, 0, 0]], "volume": null, "frequencies": null, "angle": null}
+    {"output": "led1", "values": [[0, 255, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}
+  ]
+}
+
+**Example 6: Toggle light with a tap, and Alarm if held for 3 seconds.**
+{
+  "version": 1,
+  "command": "",
+  "animation_speed": 0.2,
+  "hardware_config": {
+    "inputs": {"touch": {"type": "touch", "pin": "D16"}, "light": null, "temperature": null, "distance": null},
+    "outputs": {"led1": {"type": "neopixel", "pin": "D20"}, "led2": null, "piezo": {"type": "piezo", "pin": "D5"}, "servo": null}
+  },
+  "rules": [
+    {
+      "label": "long_press_alarm",
+      "priority": 1,
+      "condition_logic": "AND",
+      "checks": [{"input": "touch", "op": "==", "value": 1, "duration": 3000}],
+      "actions": [{"output": "piezo", "values": null, "frequencies": [880, 440], "volume": 0.8, "angle": null, "toggle": false}]
+    },
+    {
+      "label": "toggle_light",
+      "priority": 2,
+      "condition_logic": "AND",
+      "checks": [{"input": "touch", "op": "==", "value": 1, "duration": null}],
+      "actions": [{"output": "led1", "values": [[255, 255, 255, 0]], "frequencies": null, "volume": null, "angle": null, "toggle": true}]
+    }
+  ],
+  "mappings": [],
+  "default_actions": [
+    {"output": "led1", "values": [[0, 0, 0, 0]], "frequencies": null, "volume": null, "angle": null, "toggle": false},
+    {"output": "piezo", "values": null, "frequencies": [], "volume": 0.0, "angle": null, "toggle": false}
   ]
 }
 
@@ -288,6 +324,9 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 **THE "UNTOUCHED" TRAP:** Check if you have a rule for touch == 0 (untouched).
     - Does it set a color for a LED that ALSO has a mapping? IF YES, YOU FAILED. 
     - Fix: Delete the touch == 0 rule. Put the "normal" color in default_actions. This allows the mapping to modify the brightness of the default color when not touched.
+11. **SIX ACTION KEYS:** Does every action have `output`, `values`, `volume`, `frequencies`, `angle`, or `toggle`?
+12. **DURATION KEY:** Does every check in `rules` have a `duration` (number or `null`)?
+13. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
 
 ## 9. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
