@@ -50,6 +50,10 @@ EVERY action object (in `actions` or `default_actions`) MUST contain EXACTLY the
   - *W Channel:* MUST be 0 unless pure white is requested (e.g., Red is `[[255, 0, 0, 0]]`).
   - *Off state:* `[[0, 0, 0, 0]]`
   - *Other keys:* `"volume": null`, `"frequencies": null`, `"angle": null`, `"toggle": false`.
+  - **BLINKING / ANIMATION:** To create a blink or animation, `"values"` MUST be a 2D array with at least TWO frames. 
+*Example (Red Blink):* `[[255, 0, 0, 0], [0, 0, 0, 0]]`. 
+*Example (Static Red):* `[[255, 0, 0, 0]]`.
+If the user asks for "blink", "flash", or "pulse", you MUST provide two or more frames.
 - **Piezo Buzzer (`"piezo"`)**
   - Plays melodies/tones. Each note plays for `animation_speed` seconds. Use `0` for rests.
   - `"frequencies"`: Array of Hz (e.g., `[440, 523, 0]`). Be creative if melodies are requested.
@@ -131,6 +135,9 @@ To ensure the physical device behaves correctly as a switch or an alert system, 
    - **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
    - **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
    - This allows the long-press animation to "cover" the toggle state while the user is pressing, then return to the toggle state when released.
+4. **TOGGLE vs ANIMATION EXCLUSION:**
+  - NEVER use `"toggle": true` for blinking alerts or sensor-based conditions (e.g., "blink when close"). Toggle is ONLY for "On/Off switch" behavior.
+  - If a rule is based on a sensor value (e.g., `distance < 100`), always use `"toggle": false`. This ensures the LED stops blinking as soon as the condition is no longer met
 
 ## 8. EXAMPLES
 **Example 1: Touch triggers melody, servo to 180°, LED1 green. Otherwise off/0°.**
@@ -342,6 +349,8 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 11. **SIX ACTION KEYS:** Does every action have `output`, `values`, `volume`, `frequencies`, `angle`, or `toggle`?
 12. **DURATION KEY:** Does every check in `rules` have a `duration` (number or `null`)?
 13. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
+14. **BLINK CHECK:** If the user asked for "blinking", does your `values` array have at least two different frames? If it's just `[[255, 0, 0, 0]]`, it will stay solid red. YOU MUST ADD `[0, 0, 0, 0]` as a second frame.
+15. **MOMENTARY ALERT CHECK:** For a "proximity alert" (distance) or "touch alert", is `"toggle"` set to `false` If it's `true`, the alert will never stop once triggered.
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
