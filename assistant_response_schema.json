@@ -69,7 +69,7 @@
     },
     "check": {
       "type": "object",
-      "required": ["input", "op", "value"],
+      "required": ["input", "op", "value", "duration"],
       "additionalProperties": false,
       "properties": {
         "input": { "type": "string" },
@@ -84,25 +84,36 @@
     },
     "action": {
       "type": "object",
-      "required": ["output"],
+      "required": ["output", "values", "frequencies", "volume", "angle", "toggle"],
       "additionalProperties": false,
       "properties": {
         "output": { "type": "string" },
-        "toggle": { "type": "boolean", "default": false },
+        "toggle": { "type": "boolean" },
         "values": {
-          "type": "array",
-          "items": {
-            "type": "array",
-            "minItems": 4, "maxItems": 4,
-            "items": { "type": "integer", "minimum": 0, "maximum": 255 }
-          }
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "minItems": 4, "maxItems": 4,
+                "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+              }
+            }
+          ]
         },
         "frequencies": {
-          "type": "array",
-          "items": { "type": "number", "minimum": 0 }
+          "anyOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "type": "number", "minimum": 0 } }
+          ]
         },
-        "volume": { "type": "number", "minimum": 0, "maximum": 1 },
-        "angle": { "type": "number", "minimum": 0, "maximum": 180 }
+        "volume": { 
+          "anyOf": [{ "type": "number", "minimum": 0, "maximum": 1 }, { "type": "null" }] 
+        },
+        "angle": { 
+          "anyOf": [{ "type": "number", "minimum": 0, "maximum": 180 }, { "type": "null" }] 
+        }
       }
     },
     "mapping": {
