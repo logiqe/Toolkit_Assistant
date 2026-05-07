@@ -39,11 +39,25 @@
       "properties": {
         "inputs": {
           "type": "object",
-          "additionalProperties": { "anyOf": [{ "$ref": "#/$defs/hw_item" }, { "type": "null" }] }
+          "additionalProperties": false,
+          "required": ["touch", "light", "temperature", "distance"],
+          "properties": {
+            "touch": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "light": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "temperature": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "distance": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+          }
         },
         "outputs": {
           "type": "object",
-          "additionalProperties": { "anyOf": [{ "$ref": "#/$defs/hw_item" }, { "type": "null" }] }
+          "additionalProperties": false,
+          "required": ["led1", "led2", "piezo", "servo"],
+          "properties": {
+            "led1": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "led2": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "piezo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "servo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+          }
         }
       }
     },
@@ -136,7 +150,7 @@
     "hw_item": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type", "pin"],
+      "required": ["type", "pin", "port"],
       "properties": {
         "type": { "type": "string", "enum": ["analog", "touch", "neopixel", "pwm", "servo", "i2c", "vl53l0x"]},
         "pin": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
