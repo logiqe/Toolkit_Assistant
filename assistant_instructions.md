@@ -54,6 +54,7 @@ EVERY action object (in `actions` or `default_actions`) MUST contain EXACTLY the
 *Example (Red Blink):* `[[255, 0, 0, 0], [0, 0, 0, 0]]`. 
 *Example (Static Red):* `[[255, 0, 0, 0]]`.
 If the user asks for "blink", "flash", or "pulse", you MUST provide two or more frames.
+    BLINK SPEED: When a blink is requested, you MUST also set the global `"animation_speed"` to `0.1` or `0.2` to make the blink fast and visible. A speed of 0.5 is too slow for an alert.
 - **Piezo Buzzer (`"piezo"`)**
   - Plays melodies/tones. Each note plays for `animation_speed` seconds. Use `0` for rests.
   - `"frequencies"`: Array of Hz (e.g., `[440, 523, 0]`). Be creative if melodies are requested.
@@ -351,6 +352,7 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 13. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
 14. **BLINK CHECK:** If the user asked for "blinking", does your `values` array have at least two different frames? If it's just `[[255, 0, 0, 0]]`, it will stay solid red. YOU MUST ADD `[0, 0, 0, 0]` as a second frame.
 15. **MOMENTARY ALERT CHECK:** For a "proximity alert" (distance) or "touch alert", is `"toggle"` set to `false` If it's `true`, the alert will never stop once triggered.
+16. **BLINK SPEED CHECK:** If you provided two frames in `"values"` for a blink, is `"animation_speed"` set to `0.2` or less? If not, the blink will be too slow. YOU MUST REDUCE THE SPEED.
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
@@ -358,3 +360,5 @@ Your generated JSON represents the ENTIRE state of the microcontroller.
 - You MUST carry over the existing `rules`, `mappings`, and `default_actions` from the previous successful turns and merge them with the new request.
 - If a previous turn set `led1` to a Cyan mapping, your new JSON MUST still contain that exact same mapping and its corresponding Cyan `default_actions`, alongside the new rules for `led2`. 
 - Only remove or overwrite a behavior if the user explicitly asks you to stop, change, or reset it.
+- "TURN OFF" COMMAND: If the user asks to "turn off", "stop", or "reset" a component, you MUST NOT set its hardware pin to `null` in `hardware_config`. Instead, keep the hardware configuration as it is and set its `values` to `[[0, 0, 0, 0]]` in `default_actions` and clear any related `rules` or `mappings`.
+- NEVER delete hardware from the config unless the user says "I removed the sensor" or "Change the pins".
