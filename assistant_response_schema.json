@@ -76,9 +76,11 @@
         "op": { "type": "string", "enum": ["<", ">", "<=", ">=", "==", "!="] },
         "value": { "type": "number" },
         "duration": { 
-          "type": "integer", 
-          "minimum": 0, 
-          "description": "Durée minimale en ms pour valider la condition (ex: Long Press)"
+          "anyOf": [
+            { "type": "integer", "minimum": 0 },
+            { "type": "null" }
+          ],
+          "description": "Minimal duration in ms to validate condition (ex: Long Press)"
         }
       }
     },
@@ -136,7 +138,7 @@
       "additionalProperties": false,
       "required": ["type", "pin"],
       "properties": {
-        "type": { "type": "string", "enum": ["analog", "touch", "neopixel", "pwm", "servo", "i2c"] },
+        "type": { "type": "string", "enum": ["analog", "touch", "neopixel", "pwm", "servo", "i2c", "vl53l0x"]},
         "pin": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "port": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
       }
