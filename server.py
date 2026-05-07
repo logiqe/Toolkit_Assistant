@@ -40,12 +40,28 @@ mqtt_auth = {'username': settings["mqtt_user"], 'password': settings["mqtt_passw
 def on_message(client, userdata, msg):
     try:
         payload = msg.payload.decode("utf-8")
-
         parts = msg.topic.split("/")
         if len(parts) >= 3:
             board_id = parts[1]
             session = get_session(board_id)
             session["last_sensor"] = payload
+            
+            # --- AJOUT ICI ---
+            try:
+                data = json.loads(payload)
+                # Si le Pico nous dit que la calibration est finie
+                if data.get("status") == "calibration_finished":
+                    # On stocke une note pour l'IA dans la session
+                    session["pending_hardware_update"] = (
+                        f"SYSTEM NOTIFICATION: Calibration for '{data['sensor']}' is COMPLETE. "
+                        f"Measured Min: {data['min']}, Measured Max: {data['max']}. "
+                        f"Use these values for any future logic."
+                    )
+                    print(f"✅ Calibration enregistrée pour {board_id}")
+            except:
+                pass # Pas un JSON, on ignore
+            # -----------------
+
             print(f"📡 Données reçues de la carte {board_id} : {payload}")
     except Exception as e:
         print(f"Erreur MQTT: {e}")
@@ -98,6 +114,12 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
     # 1. Créer le thread si c'est la première fois pour cette carte
     if session["thread_id"] is None:
         session["thread_id"] = await create_new_thread()
+
+    message_to_ai = user_input.text
+
+    if session.get("pending_hardware_update"):
+        message_to_ai = f"{session['pending_hardware_update']}\n\nUser message: {user_input.text}"
+        del session["pending_hardware_update"]
 
     # 2. Sauvegarder le message de l'utilisateur
     session["history"].append({"sender": "user", "text": user_input.text})
