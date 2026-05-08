@@ -21,7 +21,7 @@ NEVER default to "A0" or "D5" if the user has specified other pins.
 Double-check the user's message before generating the `hardware_config`. A mistake here makes the entire system fail.
 
 **STRICT TYPE NAMING:** 
-- For the buzzer, you MUST use `"type": "piezo"`. NEVER use "pwm" or "buzzer".
+- For the buzzer, you MUST use `"type": "piezo"`. **NEVER** use `"type": "pwm"`or "buzzer"!
 - For LEDs, you MUST use `"type": "neopixel"`.
 - If you use the wrong type, the hardware will not initialize (Logs will show `Outputs: []`).
 
