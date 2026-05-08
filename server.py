@@ -27,7 +27,8 @@ def get_session(board_id: str):
         sessions[board_id] = {
             "thread_id": None, # Sera créé au premier message
             "last_sensor": "Aucune donnée",
-            "history": [{"sender": "ai", "text": settings["Welcom_msg"]}]
+            "history": [{"sender": "ai", "text": settings["Welcom_msg"]}],
+            "calibrated_sensors": {}
         }
     return sessions[board_id]
 
@@ -51,15 +52,23 @@ def on_message(client, userdata, msg):
                 data = json.loads(payload)
                 # Si le Pico nous dit que la calibration est finie
                 if data.get("status") == "calibration_finished":
-                    # On stocke une note pour l'IA dans la session
+
+                    # Sauvegarde permanente
+                    session["calibrated_sensors"][data["sensor"]] = {
+                        "min": data["min"],
+                        "max": data["max"]
+                    }
+
+                    # Message temporaire pour l'IA
                     session["pending_hardware_update"] = (
                         f"SYSTEM NOTIFICATION: Calibration for '{data['sensor']}' is COMPLETE. "
                         f"Measured Min: {data['min']}, Measured Max: {data['max']}. "
-                        f"Use these values for any future logic."
+                        f"This sensor is now calibrated."
                     )
+
                     print(f"✅ Calibration enregistrée pour {board_id}")
-            except:
-                pass # Pas un JSON, on ignore
+            except Exception as e:
+                print(f"Erreur parsing calibration: {e}") # Pas un JSON, on ignore
             # -----------------
 
             print(f"📡 Données reçues de la carte {board_id} : {payload}")
@@ -103,6 +112,8 @@ async def reset_conversation(board_id: str = Query(...)):
     session = get_session(board_id)
     session["thread_id"] = await create_new_thread()
     session["history"] = [{"sender": "ai", "text": settings["Welcom_msg"]}]
+    session["calibrated_sensors"] = {}
+    session.pop("pending_hardware_update", None)
     return {"status": "success"}
 
 # 2. Recevoir les messages du chat de la page web
@@ -115,17 +126,26 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
     if session["thread_id"] is None:
         session["thread_id"] = await create_new_thread()
 
-    message_to_ai = user_input.text
+    # CONTEXTE DES CAPTEURS CALIBRÉS
+    calibration_context = f"""
+    {json.dumps(session['calibrated_sensors'])}
+    """
 
+    message_to_ai = calibration_context + "\n\n"
+
+    # Si une calibration vient juste d'être faite
     if session.get("pending_hardware_update"):
-        message_to_ai = f"{session['pending_hardware_update']}\n\nUser message: {user_input.text}"
+        message_to_ai += session["pending_hardware_update"] + "\n\n"
         del session["pending_hardware_update"]
+
+    # Ajouter le vrai message utilisateur
+    message_to_ai += f"User message: {user_input.text}"
 
     # 2. Sauvegarder le message de l'utilisateur
     session["history"].append({"sender": "user", "text": user_input.text})
 
     # 3. Demander à l'IA (en utilisant le thread spécifique à cette carte)
-    response = await GPT_response(session["thread_id"], user_input.text)
+    response = await GPT_response(session["thread_id"], message_to_ai)
     
     texte_ia = response.get("answer", "Action effectuée.")
     valeurs_mqtt = response.get("MQTT_value", {})
