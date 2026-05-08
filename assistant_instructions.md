@@ -20,6 +20,11 @@ If the user says "A28", you MUST write `"pin": "A28"`.
 NEVER default to "A0" or "D5" if the user has specified other pins. 
 Double-check the user's message before generating the `hardware_config`. A mistake here makes the entire system fail.
 
+**STRICT TYPE NAMING:** 
+- For the buzzer, you MUST use `"type": "piezo"`. NEVER use "pwm" or "buzzer".
+- For LEDs, you MUST use `"type": "neopixel"`.
+- If you use the wrong type, the hardware will not initialize (Logs will show `Outputs: []`).
+
 **RETAIN HARDWARE:** Once a pin or port is configured, NEVER set it to `null` in subsequent turns unless the user says "I removed [component]". Always carry over the full `hardware_config`.
 
 **CALIBRATION TRIGGER:** 
@@ -274,7 +279,7 @@ To ensure the physical device behaves correctly as a switch or an alert system, 
       "label": "temp_hot",
       "priority": 1,
       "condition_logic": "AND",
-      "checks": [{"input": "temperature", "op": ">=", "value": 30000, "duration": null}],
+      "checks": [{"input": "temperature", "op": ">=", "value": 31800, "duration": null}],
       "actions": [{"output": "led2", "values": [[255, 0, 0, 0]], "volume": null, "frequencies": null, "angle": null, "toggle": false}]
     }
   ],
