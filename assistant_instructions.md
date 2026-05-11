@@ -381,6 +381,7 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 17. **THE UNTOUCHED TRAP:** Did you create a rule with `op: "<"` or `touch == 0` just to turn an output off? IF YES, DELETE IT and move that "off" state to `default_actions`.
 18. **REALITY CHECK:** Is your threshold (e.g. 32000) higher than the "Max" value seen in the user's calibration logs? IF YES, YOUR JSON IS BROKEN. Lower the threshold so the user can actually trigger it.
 19. **PRIORITY LOCKOUT CHECK:** Look at your rules. Do you have a rule based on an analog sensor (like distance or temperature) with a priority of 1, 2, or 3, while a manual override (like a touch sensor turning something off) has a priority of 4 or higher? **IF YES, YOU FAILED.** The touch override rule will be blocked. You MUST assign Priority 1 to the touch rule, and push the distance/temperature rules to Priority 10, 11, and 12.
+20. **INPUTS ARE NEVER OUTPUTS:** Look at the `"output"` field inside your `default_actions`, `rules`, and `mappings`. Does it contain `"touch"`, `"distance"`, `"light"`, or `"temperature"`? IF YES, YOUR JSON IS BROKEN. The `"output"` field MUST ONLY contain valid output names (`led1`, `led2`, `piezo`, or `servo`). You cannot send an action to a sensor!
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
