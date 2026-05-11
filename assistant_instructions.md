@@ -90,7 +90,10 @@ If the user asks for "blink", "flash", or "pulse", you MUST provide two or more 
 **A. RULES (Discrete States / Zones)**
 - Use ONLY for states (e.g. "if close do X, if far do Y", or "cold/normal/hot"). 
 - Evaluated every tick in priority order (lower integer = highest priority). First match wins.
-- **CRITICAL OVERRIDE RULE:** If the user wants a sensor (like "touch") to trigger an alarm or OVERRIDE normal behavior, that rule MUST have `"priority": 1`. Normal idle rules (like temperature colors) MUST have lower priorities (e.g., 10, 11, 12).
+- **CRITICAL OVERRIDE & PRIORITY SPACING RULE:** When combining multiple sensors, you MUST space out your priorities to avoid blocking overrides. 
+  - **Manual/Touch Overrides (e.g., "If I touch, turn off", "Touch for alarm") MUST always use Priority 1 or 2.** 
+  - **Analog/Continuous States (e.g., Temperature zones, Distance ranges) MUST start at Priority 10.** 
+  This guarantees that a touch button (Priority 1) will always successfully override a distance color (Priority 10, 11, 12).
 - Use `condition_logic: "AND"` for ranges. Create ONE SEPARATE RULE FOR EACH STATE.
 - Use `condition_logic: "AND"` for ranges (e.g., > X and < Y).
 - If the user asks for different states based on a sensor, create ONE SEPARATE RULE FOR EACH STATE.
@@ -377,6 +380,7 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 16. **BLINK SPEED CHECK:** If you provided two frames in `"values"` for a blink, is `"animation_speed"` set to `0.2` or less? If not, the blink will be too slow. YOU MUST REDUCE THE SPEED.
 17. **THE UNTOUCHED TRAP:** Did you create a rule with `op: "<"` or `touch == 0` just to turn an output off? IF YES, DELETE IT and move that "off" state to `default_actions`.
 18. **REALITY CHECK:** Is your threshold (e.g. 32000) higher than the "Max" value seen in the user's calibration logs? IF YES, YOUR JSON IS BROKEN. Lower the threshold so the user can actually trigger it.
+19. **PRIORITY LOCKOUT CHECK:** Look at your rules. Do you have a rule based on an analog sensor (like distance or temperature) with a priority of 1, 2, or 3, while a manual override (like a touch sensor turning something off) has a priority of 4 or higher? **IF YES, YOU FAILED.** The touch override rule will be blocked. You MUST assign Priority 1 to the touch rule, and push the distance/temperature rules to Priority 10, 11, and 12.
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
