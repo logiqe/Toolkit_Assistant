@@ -11,10 +11,10 @@ body {
 
 /* --- HEADER --- */
 header {
-    background-color: #FFE3CE;
+    background-color: #ffefe3;
     padding: 20px 10%; 
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; 
     align-items: center;
     border-bottom: 1px solid rgba(0,0,0,0.03);
     font-size: 1.1em;
