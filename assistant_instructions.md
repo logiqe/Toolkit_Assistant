@@ -134,7 +134,7 @@ on the Grove Shield next to their cable.
 - **"light"**: Photoresistor. ADC 0 (dark) to 65535 (bright). *Requires calibration.*
 - **"temperature"**: Thermistor. ADC 0–65535 (lower = warmer). *Requires calibration.*
 - **"distance"**: Time of Flight. Millimeters (0–2000+). Smaller = CLOSER. *Requires calibration.*
-- **"potentiometer"**: Knob analogic. ADC 0–65535. *Requires calibration.*
+- **"potentiometer"**: Knob analogic. ADC 0–65535. No calibration needed.
 - **"tilt"**: Tilt sensor. 1 (tilted), 0 (flat). Use ==. No calibration needed.
 - **"button"**: Push button. 1 (pressed), 0 (released). Use ==. No calibration needed.
 
