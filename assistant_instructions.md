@@ -471,6 +471,7 @@ mappings are meaningless on it. Use RULES with multiple color frames instead.
 For a rainbow effect, use `"values": [[255,0,0,0],[0,255,0,0],[0,0,255,0]` in a rule's actions.
 22. **VIBRATION CHECK:** Did you use `"output": "vibration"` with `"values"` or `"angle"` IF YES, YOU FAILED. 
 Vibration uses the same format as piezo: `"frequencies" + "volume"`. `"values"` must be `null`.
+23. NEVER put two actions on the same output in the same rule!
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
