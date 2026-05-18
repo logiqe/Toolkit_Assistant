@@ -192,7 +192,7 @@ If the user asks for "blink", "flash", or "pulse", you MUST provide two or more 
 
 Create rules ONLY for "Active" states (e.g., "If touched", "If too hot").
 NEVER create "Else", "Normal", or "Cool" rules (e.g., "If NOT touched", "If temp is normal").
-THE "NO-ELSE" RULE: If you write a rule to turn something OFF or to describe a "default" state (e.g., `op: "<"` for temperature), you have failed.
+THE "NO-ELSE" RULE: If you write a rule to turn something OFF or to describe a "default/released" state (e.g., `button == 0`, `touch == 0` or `op: "<"` for temperature), you have failed. Default states MUST go in `default_actions`.
 DEFAULT ACTIONS (The FALLBACK): Any state that should happen when NO rules are met MUST go in `default_actions`. If the piezo should be silent, set `volume: 0.0` in `default_actions`, NOT in a rule.
 
 **DEFAULT ACTIONS:** This is where the "Untouched" or "Normal" state lives.
@@ -249,6 +249,7 @@ When a user interacts with a momentary input (like `"button"`, `"touch"`, or `"t
 - **Momentary (`"toggle": false`)**: Use this if the user implies the action should only happen *while* interacting (e.g., "while I press", "as long as I hold", "when I touch"). The action stops as soon as the input returns to 0.
 - **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "press to turn green, press to turn off", "use it as a switch"). A single press will lock the action ON, and the next press will turn it OFF.
 *Note: If a user says "Turn on the LED when I push the button", they almost always expect a switch behavior (`toggle: true`), not a momentary behavior.*
+- **CRITICAL TOGGLE RULE:** When you use `"toggle": true` for a switch behavior (like a button or touch), NEVER create a rule for the released state (`button == 0` or `touch == 0`). The toggle mechanism inherently remembers the state! If you add a rule for `button == 0` that turns the output off, it completely destroys the toggle functionality and permanently blocks any mappings (like a potentiometer). ONE button switch = ONE rule ONLY (`value: 1`).
 3. **LONG PRESS OVERRIDE:** When a single sensor has two different behaviors based on duration:
    - **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
    - **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
@@ -458,6 +459,10 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 **THE "UNTOUCHED" TRAP:** Check if you have a rule for touch == 0 (untouched).
     - Does it set a color for a LED that ALSO has a mapping? IF YES, YOU FAILED. 
     - Fix: Delete the touch == 0 rule. Put the "normal" color in default_actions. This allows the mapping to modify the brightness of the default color when not touched.
+**THE "RELEASED / UNTOUCHED" TRAP (RULE OVERRIDE DESTRUCTION):** Check if you have a rule for `touch == 0` or `button == 0`.
+Does it exist while you also used `"toggle": true` IF YES, YOU FAILED. It breaks the toggle memory.
+Does it set an output value (like LED off `[0,0,0,0]`) that ALSO has a mapping (like a potentiometer brightness)? IF YES, YOU FAILED. The 0 rule will be active 99% of the time and permanently block the mapping.
+Fix: Delete the `button == 0` or `touch == 0` rule completely. Put the "normal" base color/state in `default_actions`.
 11. **SIX ACTION KEYS:** Does every action have `output`, `values`, `volume`, `frequencies`, `angle`, and `toggle`?
 12. **DURATION KEY:** Does every check in `rules` have a `duration` (number or `null`)?
 13. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
