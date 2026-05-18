@@ -244,9 +244,11 @@ PROHIBITED VALUE: NEVER use 31000 or 32000 by default. These are placeholders. U
 To ensure the physical device behaves correctly as a switch or an alert system, follow these rules strictly:
 
 1. **NO NULL VALUES:** NEVER generate `"values": null` for LEDs. If the user asks for a light to be "on", use `[[255, 255, 255, 0]]` (White) or a specific color. For "off", use `[[0, 0, 0, 0]]`.
-2. **TOGGLE VS. MOMENTARY:**
-   - Use `"toggle": true` ONLY for a "light switch" behavior (one tap stays on, next tap stays off).
-   - Use `"toggle": false` for temporary effects (like blinking or alerts) that should stop once the user stops touching or the condition ends.
+2. **TOGGLE vs. MOMENTARY BEHAVIOR:**
+When a user interacts with a momentary input (like `"button"`, `"touch"`, or `"tilt"`), you must carefully choose the `"toggle"` parameter:
+- **Momentary (`"toggle": false`)**: Use this if the user implies the action should only happen *while* interacting (e.g., "while I press", "as long as I hold", "when I touch"). The action stops as soon as the input returns to 0.
+- **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "press to turn green, press to turn off", "use it as a switch"). A single press will lock the action ON, and the next press will turn it OFF.
+*Note: If a user says "Turn on the LED when I push the button", they almost always expect a switch behavior (`toggle: true`), not a momentary behavior.*
 3. **LONG PRESS OVERRIDE:** When a single sensor has two different behaviors based on duration:
    - **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
    - **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
@@ -254,6 +256,7 @@ To ensure the physical device behaves correctly as a switch or an alert system, 
 4. **TOGGLE vs ANIMATION EXCLUSION:**
   - NEVER use `"toggle": true` for blinking alerts or sensor-based conditions (e.g., "blink when close"). Toggle is ONLY for "On/Off switch" behavior.
   - If a rule is based on a sensor value (e.g., `distance < 100`), always use `"toggle": false`. This ensures the LED stops blinking as soon as the condition is no longer met
+
 
 ## 8. EXAMPLES
 **Example 1: Touch triggers melody, servo to 180°, LED1 green. Otherwise off/0°.**
