@@ -247,9 +247,9 @@ To ensure the physical device behaves correctly as a switch or an alert system, 
 2. **TOGGLE vs. MOMENTARY BEHAVIOR:**
 When a user interacts with a momentary input (like `"button"`, `"touch"`, or `"tilt"`), you must carefully choose the `"toggle"` parameter:
 - **Momentary (`"toggle": false`)**: Use this if the user implies the action should only happen *while* interacting (e.g., "while I press", "as long as I hold", "when I touch"). The action stops as soon as the input returns to 0.
-- **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "press to turn green, press to turn off", "use it as a switch"). A single press will lock the action ON, and the next press will turn it OFF.
-*Note: If a user says "Turn on the LED when I push the button", they almost always expect a switch behavior (`toggle: true`), not a momentary behavior.*
-- **CRITICAL TOGGLE RULE:** When you use `"toggle": true` for a switch behavior (like a button or touch), NEVER create a rule for the released state (`button == 0` or `touch == 0`). The toggle mechanism inherently remembers the state! If you add a rule for `button == 0` that turns the output off, it completely destroys the toggle functionality and permanently blocks any mappings (like a potentiometer). ONE button switch = ONE rule ONLY (`value: 1`).
+- **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "press to turn green", "use it as a switch"). 
+**CRITICAL TOGGLE RULE:** When making a switch, the rule's `values` MUST contain the ON state (the active color), NEVER the OFF state `[[0,0,0,0]]`. The toggle mechanism inherently alternates between your rule's ON state and the `default_actions` OFF state. If you set the toggle rule to `[0,0,0,0]`, toggling will just switch between OFF and OFF! 
+**ALSO:** NEVER create a rule for the released state (`button == 0` or `touch == 0`). ONE button switch = ONE rule ONLY (`value: 1`).
 3. **LONG PRESS OVERRIDE:** When a single sensor has two different behaviors based on duration:
    - **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
    - **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
@@ -463,23 +463,27 @@ DO NOT create a "normal state" rule (e.g., "if touch == 0") that sets the LED co
 Does it exist while you also used `"toggle": true` IF YES, YOU FAILED. It breaks the toggle memory.
 Does it set an output value (like LED off `[0,0,0,0]`) that ALSO has a mapping (like a potentiometer brightness)? IF YES, YOU FAILED. The 0 rule will be active 99% of the time and permanently block the mapping.
 Fix: Delete the `button == 0` or `touch == 0` rule completely. Put the "normal" base color/state in `default_actions`.
-11. **SIX ACTION KEYS:** Does every action have `output`, `values`, `volume`, `frequencies`, `angle`, and `toggle`?
-12. **DURATION KEY:** Does every check in `rules` have a `duration` (number or `null`)?
-13. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
-14. **BLINK CHECK:** If the user asked for "blinking", does your `values` array have at least two different frames? If it's just `[[255, 0, 0, 0]]`, it will stay solid red. YOU MUST ADD `[0, 0, 0, 0]` as a second frame.
-15. **MOMENTARY ALERT CHECK:** For a "proximity alert" (distance) or "touch alert", is `"toggle"` set to `false` If it's `true`, the alert will never stop once triggered.
-16. **BLINK SPEED CHECK:** If you provided two frames in `"values"` for a blink, is `"animation_speed"` set to `0.2` or less? If not, the blink will be too slow. YOU MUST REDUCE THE SPEED.
-17. **THE UNTOUCHED TRAP (ZERO TOLERANCE):** Scan ALL your rules. Does ANY rule have a check with `"input": "touch", "op": "==", "value": 0` ?
+11. **THE ANALOG RULE TRAP (MAPPING OVERRIDE):** Check if you created a `mapping` for a continuous sensor (like `potentiometer`, `light`, or `distance`). 
+- Did you ALSO create a `rule` based on that same sensor (e.g., `potentiometer > 0`) targeting the SAME output? **IF YES, YOU FAILED.** 
+- A rule like `potentiometer > 0` will be active 99% of the time and will permanently BLOCK your mapping from working! 
+- **Fix:** Delete the `potentiometer > 0` rule completely. The base color for a mapped LED must ONLY be defined in `default_actions`. The mapping alone will control the brightness of that default color.
+12. **SIX ACTION KEYS:** Does every action have `output`, `values`, `volume`, `frequencies`, `angle`, and `toggle`?
+13. **DURATION KEY:** Does every check in `rules` have a `duration` (number or `null`)?
+14. **TOGGLE LOGIC:** If the user said "switch" or "toggle", is `"toggle": true`?
+15. **BLINK CHECK:** If the user asked for "blinking", does your `values` array have at least two different frames? If it's just `[[255, 0, 0, 0]]`, it will stay solid red. YOU MUST ADD `[0, 0, 0, 0]` as a second frame.
+16. **MOMENTARY ALERT CHECK:** For a "proximity alert" (distance) or "touch alert", is `"toggle"` set to `false` If it's `true`, the alert will never stop once triggered.
+17. **BLINK SPEED CHECK:** If you provided two frames in `"values"` for a blink, is `"animation_speed"` set to `0.2` or less? If not, the blink will be too slow. YOU MUST REDUCE THE SPEED.
+18. **THE UNTOUCHED TRAP (ZERO TOLERANCE):** Scan ALL your rules. Does ANY rule have a check with `"input": "touch", "op": "==", "value": 0` ?
 **IF YES, DELETE IT ENTIRELY**, no exceptions, no matter what the action is. Even if it sets a color, even if it's labeled "untouched_idle", even if it seems harmless. The off/idle state for touch ALWAYS lives in `default_actions`. A touch == 0 rule will block future mappings and lower-priority rules from ever working.
-18. **REALITY CHECK:** Is your threshold (e.g. 32000) higher than the "Max" value seen in the user's calibration logs? IF YES, YOUR JSON IS BROKEN. Lower the threshold so the user can actually trigger it.
-19. **PRIORITY LOCKOUT CHECK:** Look at your rules. Do you have a rule based on an analog sensor (like distance or temperature) with a priority of 1, 2, or 3, while a manual override (like a touch sensor turning something off) has a priority of 4 or higher? **IF YES, YOU FAILED.** The touch override rule will be blocked. You MUST assign Priority 1 to the touch rule, and push the distance/temperature rules to Priority 10, 11, and 12.
-20. **INPUTS ARE NEVER OUTPUTS:** Look at the `"output"` field inside your `default_actions`, `rules`, and `mappings`. Does it contain `"touch"`, `"distance"`, `"light"`, or `"temperature"`? IF YES, YOUR JSON IS BROKEN. The `"output"` field MUST ONLY contain valid output names (`led1`, `led2`, `piezo`, or `servo`). You cannot send an action to a sensor!
-21. **RAINBOW/MAPPING ON TOUCH CHECK:** Did you create a mapping with `"input": "touch"`? IF YES, YOU FAILED. Touch is binary (0 or 1) — 
+19. **REALITY CHECK:** Is your threshold (e.g. 32000) higher than the "Max" value seen in the user's calibration logs? IF YES, YOUR JSON IS BROKEN. Lower the threshold so the user can actually trigger it.
+20. **PRIORITY LOCKOUT CHECK:** Look at your rules. Do you have a rule based on an analog sensor (like distance or temperature) with a priority of 1, 2, or 3, while a manual override (like a touch sensor turning something off) has a priority of 4 or higher? **IF YES, YOU FAILED.** The touch override rule will be blocked. You MUST assign Priority 1 to the touch rule, and push the distance/temperature rules to Priority 10, 11, and 12.
+21. **INPUTS ARE NEVER OUTPUTS:** Look at the `"output"` field inside your `default_actions`, `rules`, and `mappings`. Does it contain `"touch"`, `"distance"`, `"light"`, or `"temperature"`? IF YES, YOUR JSON IS BROKEN. The `"output"` field MUST ONLY contain valid output names (`led1`, `led2`, `piezo`, or `servo`). You cannot send an action to a sensor!
+22. **RAINBOW/MAPPING ON TOUCH CHECK:** Did you create a mapping with `"input": "touch"`? IF YES, YOU FAILED. Touch is binary (0 or 1) — 
 mappings are meaningless on it. Use RULES with multiple color frames instead.
 For a rainbow effect, use `"values": [[255,0,0,0],[0,255,0,0],[0,0,255,0]` in a rule's actions.
-22. **VIBRATION CHECK:** Did you use `"output": "vibration"` with `"values"` or `"angle"` IF YES, YOU FAILED. 
+23. **VIBRATION CHECK:** Did you use `"output": "vibration"` with `"values"` or `"angle"` IF YES, YOU FAILED. 
 Vibration uses the same format as piezo: `"frequencies" + "volume"`. `"values"` must be `null`.
-23. NEVER put two actions on the same output in the same rule!
+24. NEVER put two actions on the same output in the same rule!
 
 ## 10. MEMORY & CUMULATIVE STATE
 Your generated JSON represents the ENTIRE state of the microcontroller. 
