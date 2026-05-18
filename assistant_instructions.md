@@ -445,6 +445,41 @@ When a user asks to map a LED's brightness to a continuous sensor (like a knob/p
   ]
 }
 
+**Example 7: Dimmer Switch (Knob mapped to LED brightness, Button toggles LED off)**
+{
+  "version": 1,
+  "command": "",
+  "animation_speed": 0.5,
+  "hardware_config": {
+    "inputs": {"touch": null, "light": null, "temperature": null, "distance": null, "potentiometer": {"type": "analog", "pin": "A28", "port": null}, "tilt": null, "button": {"type": "digital_in", "pin": "D8", "port": null}},
+    "outputs": {"led1": {"type": "neopixel", "pin": "D6", "port": null}, "led2": null, "piezo": null, "servo": null, "vibration": null}
+  },
+  "rules": [
+    {
+      "label": "toggle_off",
+      "priority": 1,
+      "condition_logic": "AND",
+      "checks": [{"input": "button", "op": "==", "value": 1, "duration": null}],
+      "actions": [{"output": "led1", "toggle": true, "values": [[0, 0, 0, 0]], "frequencies": null, "volume": null, "angle": null}]
+    }
+  ],
+  "mappings": [
+    {
+      "label": "knob_brightness",
+      "input": "potentiometer",
+      "in_min": 0,
+      "in_max": 65535,
+      "output": "led1",
+      "out_min": 10,
+      "out_max": 255,
+      "output_channel": 4
+    }
+  ],
+  "default_actions": [
+    {"output": "led1", "toggle": false, "values": [[255, 105, 180, 0]], "frequencies": null, "volume": null, "angle": null}
+  ]
+}
+
 ## 9. FINAL CHECKLIST (YOU MUST VERIFY THESE BEFORE ANSWERING):
 1. **DEFAULT ACTIONS BLACKOUT:** Look at your `default_actions`. Are the `values` for led1 or led2 `[[0, 0, 0, 0]]` while you are trying to map their brightness (channel 4)? **IF YES, YOU FAILED.** You cannot change the brightness of black. You MUST set the target color (e.g., `[[0, 255, 255, 0]]`) in `default_actions`!
 2. **RULE + MAPPING COLLISION:** Did you create a Rule for an output AND a Mapping for that exact same output (unless using the conditional touch trick)? **IF YES, YOU FAILED.** Rules override mappings. Use ONLY a Mapping for nightlights/fading.
