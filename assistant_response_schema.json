@@ -40,23 +40,27 @@
         "inputs": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["touch", "light", "temperature", "distance"],
+          "required": ["touch", "light", "temperature", "distance", "potentiometer", "tilt", "button"],
           "properties": {
             "touch": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
             "light": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
             "temperature": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
-            "distance": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+            "distance": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "potentiometer": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "tilt": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "button": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
           }
         },
         "outputs": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["led1", "led2", "piezo", "servo"],
+          "required": ["led1", "led2", "piezo", "servo", "vibration"],
           "properties": {
             "led1": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
             "led2": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
             "piezo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
-            "servo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
+            "servo": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] },
+            "vibration": { "anyOf": [ { "$ref": "#/$defs/hw_item" }, { "type": "null" } ] }
           }
         }
       }
@@ -152,7 +156,7 @@
       "additionalProperties": false,
       "required": ["type", "pin", "port"],
       "properties": {
-        "type": { "type": "string", "enum": ["analog", "touch", "neopixel", "pwm", "servo", "i2c", "vl53l0x"]},
+        "type": { "type": "string", "enum": ["analog", "touch", "neopixel", "pwm", "servo", "i2c", "vl53l0x", "digital_in", "pwm_out"]},
         "pin": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "port": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
       }
