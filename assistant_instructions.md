@@ -242,22 +242,24 @@ PROHIBITED VALUE: NEVER use 31000 or 32000 by default. These are placeholders. U
 
 ## 7. TOGGLE & PRIORITY LOGIC (MANDATORY)
 To ensure the physical device behaves correctly as a switch or an alert system, follow these rules strictly:
-
 1. **NO NULL VALUES:** NEVER generate `"values": null` for LEDs. If the user asks for a light to be "on", use `[[255, 255, 255, 0]]` (White) or a specific color. For "off", use `[[0, 0, 0, 0]]`.
 2. **TOGGLE vs. MOMENTARY BEHAVIOR:**
 When a user interacts with a momentary input (like `"button"`, `"touch"`, or `"tilt"`), you must carefully choose the `"toggle"` parameter:
-- **Momentary (`"toggle": false`)**: Use this if the user implies the action should only happen *while* interacting (e.g., "while I press", "as long as I hold", "when I touch"). The action stops as soon as the input returns to 0.
-- **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "press to turn green", "use it as a switch"). 
-**CRITICAL TOGGLE RULE:** When making a switch, the rule's `values` MUST contain the ON state (the active color), NEVER the OFF state `[[0,0,0,0]]`. The toggle mechanism inherently alternates between your rule's ON state and the `default_actions` OFF state. If you set the toggle rule to `[0,0,0,0]`, toggling will just switch between OFF and OFF! 
-**ALSO:** NEVER create a rule for the released state (`button == 0` or `touch == 0`). ONE button switch = ONE rule ONLY (`value: 1`).
-3. **LONG PRESS OVERRIDE:** When a single sensor has two different behaviors based on duration:
-   - **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
-   - **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
-   - This allows the long-press animation to "cover" the toggle state while the user is pressing, then return to the toggle state when released.
-4. **TOGGLE vs ANIMATION EXCLUSION:**
-  - NEVER use `"toggle": true` for blinking alerts or sensor-based conditions (e.g., "blink when close"). Toggle is ONLY for "On/Off switch" behavior.
-  - If a rule is based on a sensor value (e.g., `distance < 100`), always use `"toggle": false`. This ensures the LED stops blinking as soon as the condition is no longer met
-
+- **Momentary (`"toggle": false`)**: Use this if the user implies the action should only happen *while* interacting (e.g., "while I press", "as long as I hold"). The action stops as soon as the input returns to 0.
+- **Switch / Toggle (`"toggle": true`)**: Use this if the user implies a persistent state change (e.g., "turn on the LED with the button", "use it as a switch"). A single press will lock the action ON, and the next press will turn it OFF.
+- **CRITICAL TOGGLE RULE:** NEVER create a rule for the released state (`button == 0` or `touch == 0`). ONE button switch = ONE rule ONLY (`value: 1`).
+3. **THE DIMMER SWITCH PATTERN (Mapping a Sensor + Toggle Button):**
+When a user asks to map a LED's brightness to a continuous sensor (like a knob/potentiometer) AND use a button to turn that same LED off/on like a switch, you MUST use this exact architecture:
+- `default_actions`: Set the LED to the requested base color (e.g., Pink `[[255, 105, 180, 0]]`). Do NOT set it to `[[0,0,0,0]]`. The mapping needs a base color to work with.
+- `mappings`: Create the mapping for the continuous sensor targeting the LED's brightness (`"output_channel": 4`).
+- `rules`: Create ONE rule for the button (`button == 1`). Set `"toggle": true` and its `"values"` MUST be `[[0, 0, 0, 0]]`. This allows the button to toggle the LED OFF, and when pressed again, it returns to the `default_actions` (ON + mapped).
+- **CRITICAL:** NEVER create a rule for the continuous sensor (e.g., DO NOT create `potentiometer > 0`). The mapping handles it entirely.
+4. **LONG PRESS OVERRIDE:** When a single sensor has two different behaviors based on duration:
+- **Long Press** (e.g., `duration: 3000`): Must have `priority: 1` and `"toggle": false`.
+- **Simple Click** (e.g., `duration: null`): Must have `priority: 2` and `"toggle": true`.
+5. **TOGGLE vs ANIMATION EXCLUSION:**
+- NEVER use `"toggle": true` for blinking alerts or sensor-based conditions (e.g., "blink when close"). Toggle is ONLY for "On/Off switch" behavior.
+- If a rule is based on a sensor value (e.g., `distance < 100`), always use `"toggle": false`.
 
 ## 8. EXAMPLES
 **Example 1: Touch triggers melody, servo to 180°, LED1 green. Otherwise off/0°.**
