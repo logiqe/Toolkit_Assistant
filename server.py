@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 import asyncio
 import json
+import os
 import paho.mqtt.client as mqtt
 import paho.mqtt.publish as publish
 
@@ -13,20 +14,34 @@ app = FastAPI()
 
 sessions = {}
 
+def load_logs_from_file():
+    global sessions
+    if os.path.exists("test_participants_logs.json"):
+        try:
+            with open("test_participants_logs.json", "r", encoding="utf-8") as f:
+                sessions = json.load(f)
+            print(f"✅ {len(sessions)} sessions restored")
+        except Exception as e:
+            print(f"Error loading logs: {e}")
+
+@app.on_event("startup")
+async def startup_event():
+    load_logs_from_file()
+
 def save_logs_to_file():
     try:
         with open("test_participants_logs.json", "w", encoding="utf-8") as f:
             json.dump(sessions, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        print(f"Erreur lors de la sauvegarde des logs : {e}")
+        print(f"Error while saving logs: {e}")
 
 
 def get_session(board_id: str):
-    """Récupère ou crée une session isolée pour une carte donnée"""
+    """Gets or creates an isolated session for a given board"""
     if board_id not in sessions:
         sessions[board_id] = {
-            "thread_id": None, # Sera créé au premier message
-            "last_sensor": "Aucune donnée",
+            "thread_id": None, # created at the first message
+            "last_sensor": "No data",
             "history": [{"sender": "ai", "text": settings["Welcom_msg"]}],
             "calibrated_sensors": {}
         }
@@ -47,47 +62,58 @@ def on_message(client, userdata, msg):
             session = get_session(board_id)
             session["last_sensor"] = payload
             
-            # --- AJOUT ICI ---
             try:
                 data = json.loads(payload)
-                # Si le Pico nous dit que la calibration est finie
+                # if the board says that the calibration is done
                 if data.get("status") == "calibration_finished":
 
-                    # Sauvegarde permanente
+                    # permanent save
                     session["calibrated_sensors"][data["sensor"]] = {
                         "min": data["min"],
                         "max": data["max"]
                     }
 
-                    # Message temporaire pour l'IA
+                    # temporary message for the AI
                     session["pending_hardware_update"] = (
                         f"SYSTEM NOTIFICATION: Calibration for '{data['sensor']}' is COMPLETE. "
                         f"Measured Min: {data['min']}, Measured Max: {data['max']}. "
                         f"This sensor is now calibrated."
                     )
 
-                    print(f"✅ Calibration enregistrée pour {board_id}")
+                    print(f"Calibration saved for {board_id}")
             except Exception as e:
-                print(f"Erreur parsing calibration: {e}") # Pas un JSON, on ignore
+                print(f"Error parsing calibration: {e}") # not a JSON
             # -----------------
 
-            print(f"📡 Données reçues de la carte {board_id} : {payload}")
+            print(f"📡 Data received from the board {board_id} : {payload}")
     except Exception as e:
-        print(f"Erreur MQTT: {e}")
+        print(f"Error MQTT: {e}")
+
+def on_connect(client, userdata, flags, rc):
+    if rc == 0:
+        print("✅ MQTT connected")
+        client.subscribe(f"{base_topic}/+/sensors")
+    else:
+        print(f"❌ MQTT connection failed: {rc}")
+
+def on_disconnect(client, userdata, rc):
+    print(f"MQTT disconnected ({rc}), auto-reconnect...")
 
 mqtt_client = mqtt.Client()
-if mqtt_auth: 
-    mqtt_client.username_pw_set(mqtt_auth['username'], mqtt_auth['password'])
+mqtt_client.on_connect = on_connect
+mqtt_client.on_disconnect = on_disconnect
 mqtt_client.on_message = on_message
-mqtt_client.connect(broker, port)
-mqtt_client.subscribe(f"{base_topic}/+/sensors")
+mqtt_client.reconnect_delay_set(min_delay=1, max_delay=60)
+if mqtt_auth:
+    mqtt_client.username_pw_set(**mqtt_auth)
+mqtt_client.connect_async(broker, port)
 mqtt_client.loop_start()
 
 # --- ROUTES WEB ---
 class UserInput(BaseModel):
     text: str
 
-# 1. Fournir la page web (l'interface)
+# interface
 @app.get("/")
 def get_webpage():
     with open("index.html", "r", encoding="utf-8") as f:
@@ -104,7 +130,6 @@ async def get_history(board_id: str = Query(...)):
 
 @app.get("/welcome")
 async def get_welcome():
-    # On utilise la clé exacte de ton dictionnaire settings.py
     return {"message": settings["Welcom_msg"]}
 
 @app.post("/reset")
@@ -116,47 +141,40 @@ async def reset_conversation(board_id: str = Query(...)):
     session.pop("pending_hardware_update", None)
     return {"status": "success"}
 
-# 2. Recevoir les messages du chat de la page web
-
+# messages
 @app.post("/chat")
 async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
     session = get_session(board_id)
     
-    # 1. Créer le thread si c'est la première fois pour cette carte
     if session["thread_id"] is None:
         session["thread_id"] = await create_new_thread()
 
-    # CONTEXTE DES CAPTEURS CALIBRÉS
     calibration_context = f"""
     {json.dumps(session['calibrated_sensors'])}
     """
 
     message_to_ai = calibration_context + "\n\n"
 
-    # Si une calibration vient juste d'être faite
+    # if a calibration was just done
     if session.get("pending_hardware_update"):
         message_to_ai += session["pending_hardware_update"] + "\n\n"
         del session["pending_hardware_update"]
 
-    # Ajouter le vrai message utilisateur
     message_to_ai += f"User message: {user_input.text}"
 
-    # 2. Sauvegarder le message de l'utilisateur
     session["history"].append({"sender": "user", "text": user_input.text})
 
-    # 3. Demander à l'IA (en utilisant le thread spécifique à cette carte)
     response = await GPT_response(session["thread_id"], message_to_ai)
     
     texte_ia = response.get("answer", "Action effectuée.")
     valeurs_mqtt = response.get("MQTT_value", {})
 
-    # 4. Envoyer les ordres MQTT uniquement à CETTE carte
+    # send MQTT only on "this" board
     if valeurs_mqtt:
         topic_envoi = f"{base_topic}/{board_id}/command"
-        publish.single(topic_envoi, json.dumps(valeurs_mqtt), hostname=broker, port=port, auth=mqtt_auth)
-        print(f"📤 Ordre envoyé à {board_id} : {valeurs_mqtt}")
+        mqtt_client.publish(topic_envoi, json.dumps(valeurs_mqtt), qos=1)
+        print(f"📤 Order sent to {board_id} : {valeurs_mqtt}")
 
-    # 5. Sauvegarder la réponse de l'IA
     session["history"].append({"sender": "ai", "text": texte_ia})
 
     save_logs_to_file()
@@ -168,5 +186,5 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
 
 @app.get("/admin/logs")
 async def get_all_logs():
-    """Affiche tous les messages de tous les participants"""
+    """Displays all the messages"""
     return sessions
