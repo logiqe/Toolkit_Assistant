@@ -494,14 +494,30 @@
         const key = document.getElementById("cfg-openai-key").value;
         const welcome = document.getElementById("cfg-welcome").value;
 
-        try {
-            await saveField("OPENAI_ASSISTANT_MODEL", model);
-            if (key && !key.includes("*")) await saveField("OPENAI_API_KEY", key);
-            await saveField("WELCOME_MESSAGE", welcome);
-            toast("AI config saved ✓");
-        } catch (e) {
-            toast("Error: " + e.message);
+        // 1. Sauver le modèle
+        await fetch("/admin/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: "OPENAI_ASSISTANT_MODEL", value: model })
+        });
+    
+        // 2. Sauver le welcome message
+        await fetch("/admin/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: "WELCOME_MESSAGE", value: welcome })
+        });
+    
+        // 3. Sauver la clé OpenAI SEULEMENT si l'utilisateur a tapé une vraie clé
+        if (apiKey && apiKey.startsWith("sk-")) {
+            await fetch("/admin/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: "OPENAI_API_KEY", value: apiKey })
+            });
         }
+    
+        alert("✅ Config saved. Render redeploys in ~1 min.");
     }
 
     async function saveMQTTConfig() {

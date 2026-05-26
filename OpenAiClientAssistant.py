@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -9,10 +10,7 @@ from openai import OpenAI
 from settings import settings
 
 # Initialize the OpenAI client
-client = OpenAI(
-    api_key=settings["openAIToken"],
-    default_headers={"OpenAI-Beta": "assistants=v2"},
-)
+_client = None
 
 _state_path = Path(settings["assistant_state_file"])
 _instructions_path = Path(settings["assistant_instructions_file"])
@@ -23,6 +21,15 @@ _assistant_description = settings["assistant_description"].strip() or None
 
 _assistant_id: Optional[str] = None
 _assistant_lock = asyncio.Lock()
+
+def get_client():
+    global _client
+    if _client is None:
+        key = os.environ.get("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("OPENAI_API_KEY not set.")
+        _client = OpenAI(api_key=key)
+    return _client
 
 def _load_text_file(path: Path) -> Optional[str]:
     try:
@@ -124,7 +131,7 @@ async def get_assistant_id() -> Optional[str]:
         }
 
         try:
-            assistant = await asyncio.to_thread(client.beta.assistants.create, **request)
+            assistant = await asyncio.to_thread(get_client().beta.assistants.create, **request)
         except Exception as exc:
             logging.error("Failed to create assistant: %s", exc)
             return None
@@ -143,7 +150,7 @@ async def update_assistant_model(new_model: str) -> bool:
         return False
     try:
         result = await asyncio.to_thread(
-            client.beta.assistants.update,
+            get_client().beta.assistants.update,
             assistant_id=assistant_id,
             model=new_model,
         )
@@ -158,7 +165,7 @@ async def update_assistant_model(new_model: str) -> bool:
 async def create_new_thread():
     """Create a new OpenAI thread."""
     try:
-        thread = await asyncio.to_thread(client.beta.threads.create)
+        thread = await asyncio.to_thread(get_client().beta.threads.create)
         return thread.id
     except Exception as exc:
         logging.error("Error creating thread: %s", exc)
@@ -170,7 +177,7 @@ async def check_run(thread_id, run_id):
     while True:
         try:
             run = await asyncio.to_thread(
-                client.beta.threads.runs.retrieve,
+                get_client().beta.threads.runs.retrieve,
                 thread_id=thread_id,
                 run_id=run_id,
             )
@@ -194,7 +201,7 @@ async def GPT_response(thread_id, prompt):
     """Send a prompt to the assistant and return the response payload."""
     try:
         await asyncio.to_thread(
-            client.beta.threads.messages.create,
+            get_client().beta.threads.messages.create,
             thread_id=thread_id,
             role="user",
             content=prompt,
@@ -208,7 +215,7 @@ async def GPT_response(thread_id, prompt):
             }
 
         run = await asyncio.to_thread(
-            client.beta.threads.runs.create,
+            get_client().beta.threads.runs.create,
             thread_id=thread_id,
             assistant_id=assistant_id,
         )
@@ -216,7 +223,7 @@ async def GPT_response(thread_id, prompt):
         await check_run(thread_id, run.id)
 
         messages = await asyncio.to_thread(
-            client.beta.threads.messages.list, thread_id=thread_id
+            get_client().beta.threads.messages.list, thread_id=thread_id
         )
         if not messages.data:
             return {"response": "No response received", "values": {}}
@@ -235,7 +242,7 @@ async def GPT_response(thread_id, prompt):
 async def transcribe_audio(audio_bytes: bytes) -> str | None:
     """Transcribe WAV audio bytes using the configured OpenAI model."""
     try:
-        result = client.audio.transcriptions.create(
+        result = get_client().audio.transcriptions.create(
             model=settings["transcription_model"],
             file=("speech.wav", audio_bytes, "audio/wav"),
             response_format="text",
