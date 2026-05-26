@@ -302,9 +302,13 @@ async def update_config(data: ConfigUpdate, admin_token: str = Cookie(default=No
 
     # 3. Side-effect OpenAI Assistant
     if data.key == "OPENAI_ASSISTANT_MODEL":
-        ok_ai = await update_assistant_model(data.value)
-        if not ok_ai:
-            return JSONResponse({"error": "Failed to update assistant model on OpenAI"}, status_code=500)
+        if not os.environ.get("OPENAI_API_KEY"):
+            # API key not set yet, model will be applied on next restart
+            pass
+        else:
+            ok_ai = await update_assistant_model(data.value)
+            if not ok_ai:
+                return JSONResponse({"error": "Failed to update assistant model on OpenAI"}, status_code=500)
 
     return {"status": "saved — Render will auto-redeploy in ~1min"}
 
