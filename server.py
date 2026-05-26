@@ -354,3 +354,4 @@ async def test_mqtt(admin_token: str = Cookie(default=None)):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     connected = mqtt_client.is_connected()
     return {"connected": connected, "broker": broker, "port": port}
+
