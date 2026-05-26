@@ -63,6 +63,7 @@ settings = {
         "WELCOME_MESSAGE",
         "Hello! Ask a question to adjust the windmills.",
     ),
+    "admin_password": os.environ.get("ADMIN_PASSWORD", ""),
     "assistant_model": _optional("OPENAI_ASSISTANT_MODEL", "gpt-4o-mini"),
     "assistant_name": _optional("OPENAI_ASSISTANT_NAME", "Windmill Assistant"),
     "assistant_description": _optional(
