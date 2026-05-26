@@ -11,7 +11,7 @@ from settings import settings
 # Initialize the OpenAI client
 client = OpenAI(
     api_key=settings["openAIToken"],
-    default_headers={"OpenAI-Beta": "assistants=v1"},
+    default_headers={"OpenAI-Beta": "assistants=v2"},
 )
 
 _state_path = Path(settings["assistant_state_file"])
@@ -137,19 +137,22 @@ async def get_assistant_id() -> Optional[str]:
 async def update_assistant_model(new_model: str) -> bool:
     global _assistant_model
     assistant_id = await get_assistant_id()
+    print(f"🔧 update_assistant_model called: id={assistant_id}, model={new_model}")
     if not assistant_id:
+        print("No assistant_id")
         return False
     try:
-        await asyncio.to_thread(
+        result = await asyncio.to_thread(
             client.beta.assistants.update,
             assistant_id=assistant_id,
             model=new_model,
         )
+        print(f"✅ OpenAI returned: model={result.model}")
         _assistant_model = new_model
-        logging.info("Assistant model updated to %s", new_model)
         return True
     except Exception as exc:
-        logging.error("Failed to update assistant model: %s", exc)
+        print(f"Failed to update assistant model: {exc}")
+        import traceback; traceback.print_exc()
         return False
 
 async def create_new_thread():
