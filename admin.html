@@ -458,24 +458,35 @@
 
         // AI
         const modelSelect = document.getElementById("cfg-model");
-        const modelVal = cfg["ASSISTANT_MODEL"] || cfg["assistant_model"] || "";
+        const modelVal = cfg["OPENAI_ASSISTANT_MODEL"] || "";
+        let found = false;
         for (let opt of modelSelect.options) {
-            if (opt.value === modelVal) { opt.selected = true; break; }
+            if (opt.value === modelVal) { opt.selected = true; found = true; break; }
         }
-        document.getElementById("cfg-welcome").value = cfg["WELCOM_MSG"] || cfg["Welcom_msg"] || "";
+        if (!found && modelVal) {
+            const opt = new Option(modelVal + " (custom)", modelVal, true, true);
+            modelSelect.add(opt);
+        }
+        document.getElementById("cfg-welcome").value = cfg["WELCOME_MESSAGE"] || cfg["Welcom_msg"] || "";
 
         // MQTT
         document.getElementById("cfg-broker").value = cfg["MQTT_BROKER"] || cfg["broker"] || "";
         document.getElementById("cfg-port").value = cfg["MQTT_PORT"] || "1883";
         document.getElementById("cfg-mqtt-user").value = cfg["MQTT_USER"] || cfg["mqtt_user"] || "";
+        const hasPw = cfg["MQTT_PASSWORD"] && cfg["MQTT_PASSWORD"].length > 0;
+        document.getElementById("cfg-mqtt-password").placeholder = hasPw ? "•••••••• (saved)" : "password";
     }
 
     async function saveField(key, value) {
-        await fetch("/admin/config", {
+        const res = await fetch("/admin/config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key, value })
         });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `Failed to save ${key}`);
+        }
     }
 
     async function saveAIConfig() {
@@ -483,12 +494,14 @@
         const key = document.getElementById("cfg-openai-key").value;
         const welcome = document.getElementById("cfg-welcome").value;
 
-        const tasks = [saveField("ASSISTANT_MODEL", model)];
-        if (key && !key.includes("*")) tasks.push(saveField("OPENAI_API_KEY", key));
-        if (welcome) tasks.push(saveField("WELCOM_MSG", welcome));
-
-        await Promise.all(tasks);
-        toast("AI config saved ✓");
+        try {
+            await saveField("OPENAI_ASSISTANT_MODEL", model);
+            if (key && !key.includes("*")) await saveField("OPENAI_API_KEY", key);
+            await saveField("WELCOME_MESSAGE", welcome);
+            toast("AI config saved ✓");
+        } catch (e) {
+            toast("Error: " + e.message);
+        }
     }
 
     async function saveMQTTConfig() {
@@ -497,15 +510,15 @@
         const user = document.getElementById("cfg-mqtt-user").value;
         const pw = document.getElementById("cfg-mqtt-password").value;
 
-        const tasks = [
-            saveField("MQTT_BROKER", broker),
-            saveField("MQTT_PORT", port),
-            saveField("MQTT_USER", user),
-        ];
-        if (pw && !pw.includes("*")) tasks.push(saveField("MQTT_PASSWORD", pw));
-
-        await Promise.all(tasks);
-        toast("MQTT config saved ✓");
+        try {
+            await saveField("MQTT_BROKER", broker);
+            await saveField("MQTT_PORT", port);
+            await saveField("MQTT_USER", user);
+            if (pw && !pw.includes("*")) await saveField("MQTT_PASSWORD", pw);
+            toast("MQTT config saved ✓");
+        } catch (e) {
+            toast("Error: " + e.message);
+        }
     }
 
     // ---- MQTT TEST ----

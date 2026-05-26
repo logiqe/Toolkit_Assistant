@@ -24,7 +24,6 @@ _assistant_description = settings["assistant_description"].strip() or None
 _assistant_id: Optional[str] = None
 _assistant_lock = asyncio.Lock()
 
-
 def _load_text_file(path: Path) -> Optional[str]:
     try:
         content = path.read_text(encoding="utf-8").strip()
@@ -135,6 +134,23 @@ async def get_assistant_id() -> Optional[str]:
         logging.info("Created new assistant with id %s", _assistant_id)
         return _assistant_id
 
+async def update_assistant_model(new_model: str) -> bool:
+    global _assistant_model
+    assistant_id = await get_assistant_id()
+    if not assistant_id:
+        return False
+    try:
+        await asyncio.to_thread(
+            client.beta.assistants.update,
+            assistant_id=assistant_id,
+            model=new_model,
+        )
+        _assistant_model = new_model
+        logging.info("Assistant model updated to %s", new_model)
+        return True
+    except Exception as exc:
+        logging.error("Failed to update assistant model: %s", exc)
+        return False
 
 async def create_new_thread():
     """Create a new OpenAI thread."""

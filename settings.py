@@ -15,8 +15,7 @@ def _load_env_file(filename: str = ".env") -> None:
         if cleaned and cleaned[0] == cleaned[-1] and cleaned[0] in {'"', "'"}:
             cleaned = cleaned[1:-1]
         cleaned = cleaned.replace("\\n", "\n")
-        os.environ.setdefault(key.strip(), cleaned)
-
+        os.environ[key.strip()] = cleaned
 
 _load_env_file()
 
@@ -63,7 +62,7 @@ settings = {
         "WELCOME_MESSAGE",
         "Hello! Ask a question to adjust the windmills.",
     ),
-    "admin_password": os.environ.get("ADMIN_PASSWORD", ""),
+    "admin_password": _optional("ADMIN_PASSWORD", ""),
     "assistant_model": _optional("OPENAI_ASSISTANT_MODEL", "gpt-4o-mini"),
     "assistant_name": _optional("OPENAI_ASSISTANT_NAME", "Windmill Assistant"),
     "assistant_description": _optional(
@@ -79,3 +78,24 @@ settings = {
         _optional("OPENAI_ASSISTANT_STATE_FILE", "assistant_state.json")
     ),
 }
+
+def reload_settings():
+    """Reload .env and rebuild the settings dict in place."""
+    _load_env_file()
+    settings["broker"] = _require("MQTT_BROKER")
+    settings["topic"] = _require("MQTT_TOPIC")
+    settings["mqtt_user"] = _optional("MQTT_USER")
+    settings["mqtt_password"] = _optional("MQTT_PASSWORD")
+    settings["client_id"] = _optional("MQTT_CLIENT_ID", "windmill-assistant")
+    settings["mqtt_port"] = _optional_int("MQTT_PORT", 1883)
+    settings["openAIToken"] = _require("OPENAI_API_KEY")
+    settings["transcription_model"] = _optional("TRANSCRIPTION_MODEL", "gpt-4o-transcribe")
+    settings["Welcom_msg"] = _optional("WELCOME_MESSAGE", "Hello! Ask a question to adjust the windmills.")
+    settings["admin_password"] = _optional("ADMIN_PASSWORD", "")
+    settings["assistant_model"] = _optional("OPENAI_ASSISTANT_MODEL", "gpt-4o-mini")
+    settings["assistant_name"] = _optional("OPENAI_ASSISTANT_NAME", "Windmill Assistant")
+    settings["assistant_description"] = _optional("OPENAI_ASSISTANT_DESCRIPTION", "Controls windmill presets via MQTT.")
+    # les *_file ne changent pas en pratique, mais au cas où :
+    settings["assistant_instructions_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_INSTRUCTIONS_FILE", "assistant_instructions.md"))
+    settings["assistant_schema_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_SCHEMA_FILE", "assistant_response_schema.json"))
+    settings["assistant_state_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_STATE_FILE", "assistant_state.json"))

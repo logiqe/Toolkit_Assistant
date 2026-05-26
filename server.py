@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 from dotenv import dotenv_values, set_key
 
 from settings import settings
-from OpenAiClientAssistant import create_new_thread, GPT_response
+from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
 
 app = FastAPI()
 
@@ -20,6 +20,15 @@ sessions = {}
 admin_sessions: set[str] = set()
 
 ENV_FILE = ".env"
+
+RUNTIME_CONFIG = dict(settings)  # copie modifiable
+
+def reload_runtime_config():
+    global RUNTIME_CONFIG
+    from dotenv import dotenv_values
+    env = dotenv_values(ENV_FILE)
+    RUNTIME_CONFIG["assistant_model"] = env.get("OPENAI_ASSISTANT_MODEL", RUNTIME_CONFIG["assistant_model"])
+    RUNTIME_CONFIG["Welcom_msg"] = env.get("WELCOME_MESSAGE", RUNTIME_CONFIG["Welcom_msg"])
 
 def load_logs_from_file():
     global sessions
@@ -47,7 +56,7 @@ def get_session(board_id: str):
         sessions[board_id] = {
             "thread_id": None,
             "last_sensor": "No data",
-            "history": [{"sender": "ai", "text": settings["Welcom_msg"]}],
+            "history": [{"sender": "ai", "text":RUNTIME_CONFIG["Welcom_msg"]}],
             "calibrated_sensors": {}
         }
     return sessions[board_id]
@@ -125,13 +134,13 @@ async def get_history(board_id: str = Query(...)):
 
 @app.get("/welcome")
 async def get_welcome():
-    return {"message": settings["Welcom_msg"]}
+    return {"message": RUNTIME_CONFIG["Welcom_msg"]}
 
 @app.post("/reset")
 async def reset_conversation(board_id: str = Query(...)):
     session = get_session(board_id)
     session["thread_id"] = await create_new_thread()
-    session["history"] = [{"sender": "ai", "text": settings["Welcom_msg"]}]
+    session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
     session["calibrated_sensors"] = {}
     session.pop("pending_hardware_update", None)
     return {"status": "success"}
@@ -225,7 +234,16 @@ async def update_config(data: ConfigUpdate, admin_token: str = Cookie(default=No
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     set_key(ENV_FILE, data.key, data.value)
-    return {"status": "saved", "key": data.key}
+    reload_runtime_config()
+
+    # Side-effects selon la clé modifiée
+    if data.key == "OPENAI_ASSISTANT_MODEL":
+        ok = await update_assistant_model(data.value)
+        if not ok:
+            return JSONResponse({"error": "Failed to update assistant model"}, status_code=500)
+
+    return {"status": "saved"}
+
 
 @app.post("/admin/restart")
 async def restart_server(admin_token: str = Cookie(default=None)):
@@ -235,7 +253,7 @@ async def restart_server(admin_token: str = Cookie(default=None)):
     # Schedule restart after response is sent
     async def do_restart():
         await asyncio.sleep(0.5)
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        os._exit(0)  # Render relance automatiquement
     asyncio.create_task(do_restart())
     return {"status": "restarting"}
 
