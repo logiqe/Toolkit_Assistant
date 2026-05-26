@@ -56,7 +56,7 @@ settings = {
     "mqtt_password": _optional("MQTT_PASSWORD"),
     "client_id": _optional("MQTT_CLIENT_ID", "windmill-assistant"),
     "mqtt_port": _optional_int("MQTT_PORT", 1883),
-    "openAIToken": _require("OPENAI_API_KEY"),
+    "openAIToken": _optional("OPENAI_API_KEY"),
     "transcription_model": _optional("TRANSCRIPTION_MODEL", "gpt-4o-transcribe"),
     "Welcom_msg": _optional(
         "WELCOME_MESSAGE",
@@ -88,7 +88,7 @@ def reload_settings():
     settings["mqtt_password"] = _optional("MQTT_PASSWORD")
     settings["client_id"] = _optional("MQTT_CLIENT_ID", "windmill-assistant")
     settings["mqtt_port"] = _optional_int("MQTT_PORT", 1883)
-    settings["openAIToken"] = _require("OPENAI_API_KEY")
+    settings["openAIToken"] = _optional("OPENAI_API_KEY")
     settings["transcription_model"] = _optional("TRANSCRIPTION_MODEL", "gpt-4o-transcribe")
     settings["Welcom_msg"] = _optional("WELCOME_MESSAGE", "Hello! Ask a question to adjust the windmills.")
     settings["admin_password"] = _optional("ADMIN_PASSWORD", "")
