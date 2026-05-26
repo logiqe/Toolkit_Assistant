@@ -4,95 +4,117 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toolkit Admin</title>
-    <link rel="stylesheet" href="style.css">
     <style>
-        /* --- ADMIN-SPECIFIC OVERRIDES --- */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-        /* body already set by style.css but we need scrollable for dashboard */
-        #admin-page body, body {
-            height: auto;
+        :root {
+            --bg: #FFE3CE;
+            --brown: #5E2A03;
+            --orange: #FF8B33;
+            --white: #ffffff;
+            --border: #2c2c2c;
+            --red: #e74c3c;
+            --green: #2ed573;
+            --muted: #888;
+            --card-bg: #fff8f3;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--brown);
             min-height: 100vh;
         }
 
-        /* LOGIN PAGE */
+        /* ---- LOGIN PAGE ---- */
         #login-page {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            height: 100dvh;
-            gap: 12px;
+            min-height: 100vh;
+            gap: 24px;
         }
 
         #login-page h1 {
-            font-size: 1.2em;
-            font-weight: 600;
-            color: #5E2A03;
+            font-size: 1.6em;
+            font-weight: 700;
         }
 
         #login-page p {
-            color: #888;
+            color: var(--muted);
             font-size: 14px;
         }
 
         .login-box {
-            background: white;
-            border: 1px solid #2c2c2c;
-            border-radius: 18px;
-            padding: 28px 24px;
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
             width: 100%;
-            max-width: 320px;
+            max-width: 340px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 14px;
         }
 
-        /* DASHBOARD */
-        #admin-page {
-            display: none;
-            flex-direction: column;
-            min-height: 100vh;
+        /* ---- ADMIN DASHBOARD ---- */
+        #admin-page { display: none; flex-direction: column; min-height: 100vh; }
+
+        header {
+            background: var(--bg);
+            border-bottom: 1px solid rgba(0,0,0,0.07);
+            padding: 16px clamp(16px, 5vw, 48px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 700;
+            font-size: 1.1em;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
+
+        header span { color: var(--brown); }
+
+        .header-actions { display: flex; gap: 10px; align-items: center; }
 
         main {
-            padding: 20px clamp(12px, 5vw, 10%);
+            padding: clamp(16px, 4vw, 48px);
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            max-width: 860px;
+            gap: 28px;
+            max-width: 900px;
             margin: 0 auto;
             width: 100%;
-            padding-bottom: 40px;
         }
 
-        /* CARDS — same border treatment as .bubble */
+        /* ---- CARDS ---- */
         .card {
-            background: white;
-            border: 1px solid #2c2c2c;
-            border-radius: 18px;
-            padding: 20px 22px;
+            background: var(--card-bg);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 16px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            gap: 18px;
         }
 
         .card-title {
-            font-size: 0.7em;
+            font-size: 0.75em;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1.5px;
-            color: #FF8B33;
+            color: var(--orange);
         }
 
-        /* FIELDS */
-        .field { display: flex; flex-direction: column; gap: 5px; }
+        /* ---- FORM ELEMENTS ---- */
+        .field { display: flex; flex-direction: column; gap: 6px; }
 
         label {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
-            color: #888;
+            color: var(--muted);
             text-transform: uppercase;
             letter-spacing: 0.8px;
         }
@@ -102,17 +124,16 @@
         select {
             width: 100%;
             padding: 10px 14px;
-            border: 1px solid #2c2c2c;
+            border: 1px solid var(--border);
             border-radius: 10px;
             font-size: 14px;
-            background: white;
-            color: #5E2A03;
+            background: var(--white);
+            color: var(--brown);
             outline: none;
-            font-family: inherit;
             transition: border-color 0.15s;
         }
 
-        input:focus, select:focus { border-color: #FF8B33; }
+        input:focus, select:focus { border-color: var(--orange); }
 
         .field-row {
             display: grid;
@@ -122,80 +143,77 @@
 
         @media (max-width: 500px) { .field-row { grid-template-columns: 1fr; } }
 
-        /* BUTTONS — reuse send-btn aesthetic */
-        .btn-admin {
+        /* ---- BUTTONS ---- */
+        button, .btn {
             padding: 10px 18px;
             border-radius: 10px;
-            border: 1px solid #2c2c2c;
+            border: none;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            font-family: inherit;
             transition: opacity 0.15s, transform 0.1s;
         }
 
-        .btn-admin:active { transform: scale(0.97); }
-        .btn-admin:disabled { opacity: 0.4; cursor: not-allowed; }
+        button:active { transform: scale(0.97); }
 
-        .btn-dark  { background: #5E2A03; color: white; border-color: #5E2A03; }
-        .btn-orange { background: #FF8B33; color: white; border-color: #FF8B33; }
-        .btn-ghost { background: transparent; color: #5E2A03; }
-        .btn-danger { background: transparent; color: #c0392b; border-color: #c0392b; }
-
-        .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
-
-        /* The login "Sign in" button matches send-btn color */
-        .btn-login {
-            background: #5E2A03;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            padding: 11px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            width: 100%;
+        .btn-primary {
+            background: var(--brown);
+            color: var(--white);
         }
 
-        .btn-login:active { opacity: 0.85; }
-
-        /* HEADER uses style.css header, just override the right side */
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+        .btn-orange {
+            background: var(--orange);
+            color: var(--white);
         }
 
-        /* BADGE — same pill shape as countdown-box feel */
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--brown);
+        }
+
+        .btn-danger {
+            background: transparent;
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+        }
+
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* ---- STATUS BADGE ---- */
         .badge {
             display: inline-flex;
             align-items: center;
             gap: 5px;
             font-size: 12px;
             font-weight: 600;
-            padding: 4px 10px;
+            padding: 3px 10px;
             border-radius: 20px;
-            border: 1px solid transparent;
         }
 
-        .badge-green { background: #d4fce8; color: #1a7a45; border-color: #2ed573; }
-        .badge-red   { background: #fce4e4; color: #a01a1a; border-color: #c0392b; }
+        .badge-green { background: #d4fce8; color: #1a7a45; }
+        .badge-red   { background: #fce4e4; color: #a01a1a; }
         .badge-dot   { width: 7px; height: 7px; border-radius: 50%; }
         .badge-green .badge-dot { background: #2ed573; }
-        .badge-red   .badge-dot { background: #c0392b; }
+        .badge-red   .badge-dot { background: var(--red); }
 
-        /* SESSIONS */
-        .sessions-list { display: flex; flex-direction: column; gap: 8px; }
+        /* ---- SESSIONS TABLE ---- */
+        .sessions-list { display: flex; flex-direction: column; gap: 10px; }
 
         .session-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: #FFF8F3;
+            background: var(--white);
             border: 1px solid rgba(0,0,0,0.08);
             border-radius: 10px;
-            padding: 11px 14px;
+            padding: 12px 16px;
             gap: 10px;
             flex-wrap: wrap;
         }
@@ -204,12 +222,35 @@
             font-family: monospace;
             font-size: 13px;
             font-weight: 600;
-            color: #5E2A03;
         }
 
-        .session-meta { font-size: 12px; color: #888; }
+        .session-meta {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
         .session-actions { display: flex; gap: 8px; align-items: center; }
 
+        /* ---- TOAST ---- */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: var(--brown);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* ---- MISC ---- */
         .section-actions {
             display: flex;
             gap: 10px;
@@ -219,44 +260,16 @@
 
         .empty-state {
             text-align: center;
-            color: #888;
+            color: var(--muted);
             font-size: 14px;
-            padding: 16px 0;
+            padding: 20px 0;
         }
 
         .divider {
             border: none;
             border-top: 1px solid rgba(0,0,0,0.07);
-            margin: 2px 0;
+            margin: 4px 0;
         }
-
-        .error-msg {
-            color: #c0392b;
-            font-size: 13px;
-            display: none;
-        }
-
-        /* TOAST — same style as ai bubble */
-        #toast {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
-            transform: translateX(-50%) translateY(80px);
-            background: #5E2A03;
-            color: white;
-            padding: 10px 22px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 500;
-            transition: transform 0.3s ease;
-            pointer-events: none;
-            z-index: 100;
-            white-space: nowrap;
-        }
-
-        #toast.show { transform: translateX(-50%) translateY(0); }
-
-        a { text-decoration: none; }
     </style>
 </head>
 <body>
@@ -270,19 +283,18 @@
             <label>Password</label>
             <input type="password" id="login-password" placeholder="••••••••" autofocus>
         </div>
-        <div id="login-error" class="error-msg">Wrong password.</div>
-        <button class="btn-login" onclick="doLogin()">Sign in</button>
+        <div id="login-error" style="color: var(--red); font-size:13px; display:none;">Wrong password.</div>
+        <button class="btn-primary" onclick="doLogin()">Sign in</button>
     </div>
 </div>
 
 <!-- ===== ADMIN DASHBOARD ===== -->
 <div id="admin-page">
-
     <header>
         <span>Toolkit Admin</span>
-        <div class="header-right">
+        <div class="header-actions">
             <div id="mqtt-badge" class="badge badge-red"><span class="badge-dot"></span> MQTT</div>
-            <button class="btn-admin btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
+            <button class="btn-ghost btn-sm" onclick="doLogout()">Sign out</button>
         </div>
     </header>
 
@@ -296,8 +308,8 @@
                 <div class="field">
                     <label>Model</label>
                     <select id="cfg-model">
-                        <option value="gpt-4o-mini">gpt-4o-mini — fast & cheap</option>
-                        <option value="gpt-4o">gpt-4o — smarter, slower</option>
+                        <option value="gpt-4o-mini">gpt-4o-mini (fast, cheap)</option>
+                        <option value="gpt-4o">gpt-4o (smart, slower)</option>
                         <option value="gpt-4-turbo">gpt-4-turbo</option>
                         <option value="gpt-3.5-turbo">gpt-3.5-turbo (legacy)</option>
                     </select>
@@ -314,7 +326,7 @@
             </div>
 
             <div class="section-actions">
-                <button class="btn-admin btn-dark" onclick="saveAIConfig()">Save AI config</button>
+                <button class="btn-primary" onclick="saveAIConfig()">Save AI config</button>
             </div>
         </div>
 
@@ -345,19 +357,19 @@
             </div>
 
             <div class="section-actions">
-                <button class="btn-admin btn-ghost" onclick="testMQTT()">Test connection</button>
-                <button class="btn-admin btn-dark" onclick="saveMQTTConfig()">Save MQTT config</button>
+                <button class="btn-ghost" onclick="testMQTT()">Test connection</button>
+                <button class="btn-primary" onclick="saveMQTTConfig()">Save MQTT config</button>
             </div>
         </div>
 
-        <!-- SERVER -->
+        <!-- RESTART -->
         <div class="card">
             <div class="card-title">Server</div>
-            <p style="font-size:14px; color:#888;">
-                Restart the server to apply configuration changes. Sessions are saved before restart.
+            <p style="font-size:14px; color: var(--muted);">
+                Restart the server to apply configuration changes. Active sessions are saved before restart.
             </p>
             <div class="section-actions">
-                <button class="btn-admin btn-orange" onclick="doRestart()">Save & Restart server</button>
+                <button class="btn-orange" onclick="doRestart()">Save & Restart server</button>
             </div>
         </div>
 
@@ -369,7 +381,7 @@
             </div>
             <hr class="divider">
             <div class="section-actions">
-                <button class="btn-admin btn-danger btn-sm" onclick="clearAllSessions()">Clear all sessions</button>
+                <button class="btn-danger btn-sm" onclick="clearAllSessions()">Clear all sessions</button>
             </div>
         </div>
 
@@ -381,6 +393,9 @@
 <script>
     const loginPage = document.getElementById("login-page");
     const adminPage = document.getElementById("admin-page");
+    let isLoggedIn = false;
+
+    // ---- AUTH ----
 
     async function doLogin() {
         const pw = document.getElementById("login-password").value;
@@ -394,6 +409,7 @@
         });
 
         if (res.ok) {
+            isLoggedIn = true;
             loginPage.style.display = "none";
             adminPage.style.display = "flex";
             loadAll();
@@ -408,35 +424,47 @@
 
     async function doLogout() {
         await fetch("/admin/logout", { method: "POST" });
+        isLoggedIn = false;
         adminPage.style.display = "none";
         loginPage.style.display = "flex";
         document.getElementById("login-password").value = "";
     }
 
+    // Check if already authenticated (cookie still valid)
     async function checkAuth() {
         const res = await fetch("/admin/config");
         if (res.ok) {
+            isLoggedIn = true;
             loginPage.style.display = "none";
             adminPage.style.display = "flex";
             loadAll();
         }
     }
 
+    // ---- LOAD ALL ----
+
     async function loadAll() {
-        await Promise.all([loadConfig(), loadSessions(), checkMQTT()]);
+        await loadConfig();
+        await loadSessions();
+        await checkMQTT();
     }
+
+    // ---- CONFIG ----
 
     async function loadConfig() {
         const res = await fetch("/admin/config");
         if (!res.ok) return;
         const cfg = await res.json();
 
+        // AI
         const modelSelect = document.getElementById("cfg-model");
         const modelVal = cfg["ASSISTANT_MODEL"] || cfg["assistant_model"] || "";
         for (let opt of modelSelect.options) {
             if (opt.value === modelVal) { opt.selected = true; break; }
         }
         document.getElementById("cfg-welcome").value = cfg["WELCOM_MSG"] || cfg["Welcom_msg"] || "";
+
+        // MQTT
         document.getElementById("cfg-broker").value = cfg["MQTT_BROKER"] || cfg["broker"] || "";
         document.getElementById("cfg-port").value = cfg["MQTT_PORT"] || "1883";
         document.getElementById("cfg-mqtt-user").value = cfg["MQTT_USER"] || cfg["mqtt_user"] || "";
@@ -480,6 +508,8 @@
         toast("MQTT config saved ✓");
     }
 
+    // ---- MQTT TEST ----
+
     async function checkMQTT() {
         const res = await fetch("/admin/mqtt-test");
         if (!res.ok) return;
@@ -495,6 +525,8 @@
         const badge = document.getElementById("mqtt-badge");
         toast(badge.classList.contains("badge-green") ? "MQTT connected ✓" : "MQTT not reachable ✗");
     }
+
+    // ---- SESSIONS ----
 
     async function loadSessions() {
         const res = await fetch("/admin/logs");
@@ -519,9 +551,9 @@
                     </div>
                     <div class="session-actions">
                         <a href="/?board_id=${id}" target="_blank">
-                            <button class="btn-admin btn-ghost btn-sm">Open chat</button>
+                            <button class="btn-ghost btn-sm">Open chat</button>
                         </a>
-                        <button class="btn-admin btn-danger btn-sm" onclick="clearSession('${id}')">Clear</button>
+                        <button class="btn-danger btn-sm" onclick="clearSession('${id}')">Clear</button>
                     </div>
                 </div>`;
         }).join("");
@@ -530,6 +562,7 @@
     async function clearSession(boardId) {
         if (!confirm(`Clear session for ${boardId}?`)) return;
         await fetch(`/admin/clear-session?board_id=${boardId}`, { method: "POST" });
+        document.getElementById(`row-${boardId}`)?.remove();
         toast("Session cleared ✓");
         await loadSessions();
     }
@@ -541,12 +574,16 @@
         await loadSessions();
     }
 
+    // ---- RESTART ----
+
     async function doRestart() {
         if (!confirm("Restart the server? It will be unavailable for a few seconds.")) return;
         toast("Restarting...");
         await fetch("/admin/restart", { method: "POST" });
         setTimeout(() => { location.reload(); }, 3000);
     }
+
+    // ---- TOAST ----
 
     function toast(msg) {
         const el = document.getElementById("toast");
@@ -555,6 +592,7 @@
         setTimeout(() => el.classList.remove("show"), 2500);
     }
 
+    // Init
     checkAuth();
 </script>
 
