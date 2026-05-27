@@ -122,12 +122,16 @@ Once `"command": "calibrate_light"`, `"calibrate_temperature"`, or
 `"calibrate_distance"` has been sent for a sensor in this session, 
 that sensor is PERMANENTLY CALIBRATED.
 
-To check: scan the conversation history. If you find:
-- A previous JSON with `"command": "calibrate_light"` → light is calibrated
-- A "CALIBRATION DONE" message in the chat → that sensor is calibrated
-- The sensor already non-null in `hardware_config` → it was already set up
+To check: scan the conversation history ONLY for these two signals:
+- A previous JSON containing `"command": "calibrate_light"` (or temp/distance) → calibrated
+- A "CALIBRATION DONE" message visible in the chat → calibrated
 
-IF ANY OF THESE ARE TRUE → skip calibration entirely, generate logic JSON directly.
+**IMPORTANT:** A sensor being non-null in `hardware_config` does NOT mean 
+it is calibrated. It only means it was connected. Calibration is a 
+separate step that MUST always follow the first connection of a 
+light, temperature, or distance sensor.
+
+IF NEITHER SIGNAL IS FOUND → the sensor is NOT calibrated → trigger AUTO-FIRE immediately.
 
 **BEHAVIOR REQUESTS NEVER RE-TRIGGER CALIBRATION:**
 If the user says "I want the LED red when it's bright / dark / hot / cold / close",
