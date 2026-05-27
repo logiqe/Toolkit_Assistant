@@ -196,6 +196,10 @@ async def get_welcome():
 @app.post("/reset")
 async def reset_conversation(board_id: str = Query(...)):
     session = get_session(board_id)
+
+    if len(session.get("history", [])) > 1:
+        archive_session(board_id, session)
+
     session["thread_id"] = await create_new_thread()
     session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
     session["calibrated_sensors"] = {}
