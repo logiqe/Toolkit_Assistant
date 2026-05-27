@@ -359,3 +359,14 @@ async def test_mqtt(admin_token: str = Cookie(default=None)):
     connected = mqtt_client.is_connected()
     return {"connected": connected, "broker": broker, "port": port}
 
+@app.post("/admin/reset-assistant")
+async def reset_assistant(admin_token: str = Cookie(default=None)):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    import os
+    from pathlib import Path
+    state_file = Path(settings["assistant_state_file"])
+    if state_file.exists():
+        state_file.unlink()
+        return {"status": "deleted", "file": str(state_file)}
+    return {"status": "file not found"}
