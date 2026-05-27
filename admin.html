@@ -270,6 +270,81 @@
             border-top: 1px solid rgba(0,0,0,0.07);
             margin: 4px 0;
         }
+
+        .archive-board {
+            background: var(--white);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+        }
+
+        .archive-board-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .archive-board-header .session-id {
+            font-family: monospace;
+            font-weight: 600;
+        }
+
+        .archive-entries {
+            margin-top: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .archive-entries.open { display: flex; }
+
+        .archive-entry {
+            background: var(--bg);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 13px;
+        }
+
+        .archive-entry-date {
+            font-weight: 600;
+            color: var(--brown);
+            margin-bottom: 6px;
+            cursor: pointer;
+        }
+
+        .archive-messages {
+            display: none;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.08);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .archive-messages.open { display: block; }
+
+        .archive-msg {
+            padding: 6px 10px;
+            margin: 4px 0;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .archive-msg.user { background: #e8f0fe; }
+        .archive-msg.ai   { background: #f3e8d8; }
+
+        .archive-msg-sender {
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin-bottom: 2px;
+        }
+
     </style>
 </head>
 <body>
@@ -299,7 +374,6 @@
     </header>
 
     <main>
-
         <!-- AI CONFIG -->
         <div class="card">
             <div class="card-title">AI Configuration</div>
@@ -385,6 +459,19 @@
             </div>
         </div>
 
+        <!-- ARCHIVES -->
+        <div class="card">
+            <div class="card-title">Archives</div>
+            <p style="font-size:14px; color: var(--muted);">
+                Past conversations from cleared sessions.
+            </p>
+            <div class="section-actions" style="margin-bottom: 12px;">
+                <button class="btn-ghost btn-sm" onclick="loadArchives()">🔄 Refresh archives</button>
+            </div>
+            <div id="archives-list" class="sessions-list">
+                <div class="empty-state">Click refresh to load archives</div>
+            </div>
+        </div>
     </main>
 </div>
 
@@ -447,6 +534,7 @@
         await loadConfig();
         await loadSessions();
         await checkMQTT();
+        await loadArchives();
     }
 
     // ---- CONFIG ----
@@ -658,6 +746,97 @@
         }
         el.textContent = msg;
     }
+
+    // ---- ARCHIVES ----
+
+    async function loadArchives() {
+        const list = document.getElementById("archives-list");
+        list.innerHTML = `<div class="empty-state">Loading...</div>`;
+
+        const res = await fetch("/admin/archives");
+        if (!res.ok) {
+            list.innerHTML = `<div class="empty-state">Failed to load archives</div>`;
+            return;
+        }
+
+        const data = await res.json();
+        const boardIds = Object.keys(data);
+
+        if (boardIds.length === 0) {
+            list.innerHTML = `<div class="empty-state">No archives yet</div>`;
+            return;
+        }
+
+        list.innerHTML = boardIds.map(boardId => {
+            const entries = data[boardId] || [];
+            // tri du plus récent au plus ancien
+            const sorted = [...entries].sort((a, b) =>
+                new Date(b.archived_at) - new Date(a.archived_at)
+            );
+
+            return `
+                <div class="archive-board">
+                    <div class="archive-board-header" onclick="toggleArchiveBoard('${boardId}')">
+                        <div>
+                            <div class="session-id">${boardId}</div>
+                            <div class="session-meta">${sorted.length} archived session(s)</div>
+                        </div>
+                        <span id="arrow-${boardId}">▼</span>
+                    </div>
+                    <div class="archive-entries" id="entries-${boardId}">
+                        ${sorted.map((entry, idx) => renderArchiveEntry(boardId, idx, entry)).join("")}
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function renderArchiveEntry(boardId, idx, entry) {
+        const date = new Date(entry.archived_at).toLocaleString();
+        const msgCount = (entry.history || []).length;
+        const sensorCount = Object.keys(entry.calibrated_sensors || {}).length;
+        const entryKey = `${boardId}-${idx}`;
+
+        const messagesHtml = (entry.history || []).map(m => `
+            <div class="archive-msg ${m.sender}">
+                <div class="archive-msg-sender">${m.sender}</div>
+                <div>${escapeHtml(m.text)}</div>
+            </div>
+        `).join("");
+
+        return `
+            <div class="archive-entry">
+                <div class="archive-entry-date" onclick="toggleArchiveMessages('${entryKey}')">
+                    📅 ${date} — ${msgCount} messages, ${sensorCount} calibrated sensors
+                </div>
+                <div class="archive-messages" id="msgs-${entryKey}">
+                    ${messagesHtml || '<div class="empty-state">No messages</div>'}
+                </div>
+            </div>
+        `;
+    }
+
+    function toggleArchiveBoard(boardId) {
+        const el = document.getElementById(`entries-${boardId}`);
+        const arrow = document.getElementById(`arrow-${boardId}`);
+        el.classList.toggle("open");
+        arrow.textContent = el.classList.contains("open") ? "▲" : "▼";
+    }
+
+    function toggleArchiveMessages(entryKey) {
+        document.getElementById(`msgs-${entryKey}`).classList.toggle("open");
+    }
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
 
     // Init
     checkAuth();

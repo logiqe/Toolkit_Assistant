@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query, Request, Response, Cookie
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from datetime import datetime
 import asyncio
 import json
 import os
@@ -326,14 +327,45 @@ async def restart_server(admin_token: str = Cookie(default=None)):
     return {"status": "restarting"}
 
 
+def archive_session(board_id: str, session: dict):
+    try:
+        archives = {}
+        if os.path.exists("archives.json"):
+            with open("archives.json", "r", encoding="utf-8") as f:
+                archives = json.load(f)
+        
+        if board_id not in archives:
+            archives[board_id] = []
+        
+        archives[board_id].append({
+            "archived_at": datetime.now().isoformat(),
+            "history": session.get("history", []),
+            "calibrated_sensors": session.get("calibrated_sensors", {})
+        })
+        
+        with open("archives.json", "w", encoding="utf-8") as f:
+            json.dump(archives, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Error archiving session: {e}")
+
 @app.post("/admin/clear-session")
 async def clear_session(board_id: str = Query(...), admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if board_id in sessions:
+        archive_session(board_id, sessions[board_id])  # ← archive avant de supprimer
         del sessions[board_id]
         save_logs_to_file()
     return {"status": "cleared"}
+
+@app.get("/admin/archives")
+async def get_archives(admin_token: str = Cookie(default=None)):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if not os.path.exists("archives.json"):
+        return {}
+    with open("archives.json", "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 @app.post("/admin/clear-all")
