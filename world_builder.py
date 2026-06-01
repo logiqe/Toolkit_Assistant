@@ -1,0 +1,129 @@
+"""
+world_builder.py
+Generates Three.js WebXR scenes from natural language descriptions using OpenAI API.
+Reuses the same OPENAI_API_KEY already used for the main assistant.
+The generated HTML is self-contained and includes a sensor bridge (postMessage).
+"""
+
+import json
+import os
+import re
+from openai import OpenAI
+from pathlib import Path
+
+_client = None
+_system_prompt_cache = None
+
+WORLD_PROMPT_FILE = Path(__file__).parent / "world_builder_instructions.md"
+
+
+def load_system_prompt() -> str:
+    """Load the world builder system prompt from disk (cached)."""
+    global _system_prompt_cache
+    if _system_prompt_cache is None:
+        if not WORLD_PROMPT_FILE.exists():
+            raise RuntimeError(f"World prompt file not found: {WORLD_PROMPT_FILE}")
+        _system_prompt_cache = WORLD_PROMPT_FILE.read_text(encoding="utf-8")
+    return _system_prompt_cache
+
+
+def reload_system_prompt() -> str:
+    """Force reload from disk (useful for admin hot-reload)."""
+    global _system_prompt_cache
+    _system_prompt_cache = None
+    return load_system_prompt()
+
+def get_client():
+    global _client
+    if _client is None:
+        key = os.environ.get("OPENAI_API_KEY")
+        if not key:
+            raise RuntimeError("OPENAI_API_KEY not set.")
+        _client = OpenAI(api_key=key)
+    return _client
+
+
+def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
+    """
+    Given a conversation history, generate a 3D world or a chat reply.
+    Uses the chat completions API (not the Assistants API) for simplicity.
+    Returns: { "reply": str, "world_code": str | None }
+    """
+    try:
+        client = get_client()
+
+        # Build messages: system prompt + conversation history
+        system_prompt = load_system_prompt()
+        if hardware_context:
+            system_prompt += "\n\n" + format_hardware_context(hardware_context)
+        
+        messages = [{"role": "system", "content": system_prompt}] + conversation_history
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=8000,
+            response_format={"type": "json_object"},  # forces valid JSON output
+            messages=messages,
+        )
+
+        raw = response.choices[0].message.content.strip()
+
+        try:
+            result = json.loads(raw)
+            return {
+                "reply": result.get("reply", "Here's your world!"),
+                "world_code": result.get("world_code", None)
+            }
+        except json.JSONDecodeError:
+            # Fallback: try to extract JSON block
+            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    "reply": result.get("reply", "Here's your world!"),
+                    "world_code": result.get("world_code", None)
+                }
+            return {"reply": raw[:300], "world_code": None}
+
+    except Exception as e:
+        return {
+            "reply": f"Error generating world: {str(e)}",
+            "world_code": None
+        }
+    
+def format_hardware_context(ctx: dict) -> str:
+    """Render the hardware state as a clear text block for the LLM."""
+    inputs = ctx.get("configured_inputs", [])
+    outputs = ctx.get("configured_outputs", [])
+    calibrated = ctx.get("calibrated_sensors", {})
+
+    lines = ["## CURRENT HARDWARE CONFIGURATION (live from the user's board)"]
+
+    if not inputs and not outputs:
+        lines.append("⚠ No hardware components are currently configured on the board.")
+        lines.append("If the user asks to bind a sensor that isn't configured, gently mention that the sensor needs to be set up first via the main chat.")
+        return "\n".join(lines)
+
+    if inputs:
+        lines.append("\n### Available sensors (window.sensorData keys):")
+        for inp in inputs:
+            name = inp.get("name") or inp.get("type")
+            pin = inp.get("pin", "?")
+            cal = calibrated.get(name)
+            cal_str = f" — calibrated range [{cal['min']}–{cal['max']}]" if cal else ""
+            lines.append(f"  • `{name}` (pin {pin}){cal_str}")
+
+    if outputs:
+        lines.append("\n### Physical outputs already in use (for reference):")
+        for out in outputs:
+            lines.append(f"  • {out.get('name', out.get('type'))} on pin {out.get('pin', '?')}")
+
+    lines.append(
+        "\n### How to use this in the scene:\n"
+        "Your `window.onSensorUpdate(sensors)` callback will receive ONLY the keys "
+        "listed above. Build reactions around them. For example, if the user says "
+        "'when I press the button, spawn a fish', and `button` is in the list, "
+        "write code that detects a 0→1 transition on `sensors.button` and adds a fish mesh to the scene."
+    )
+
+    return "\n".join(lines)

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Request, Response, Cookie
+from fastapi import FastAPI, Query, Request, Response, Cookie, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from datetime import datetime
@@ -13,12 +13,26 @@ import paho.mqtt.client as mqtt
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
 
+# ── World Builder import ──
+try:
+    from world_builder import generate_world
+    WORLD_BUILDER_AVAILABLE = True
+except ImportError:
+    WORLD_BUILDER_AVAILABLE = False
+    print("⚠️  world_builder.py not found — /world-chat will be unavailable")
+
 app = FastAPI()
 
 # --- Global state ---
 sessions = {}
 admin_sessions: set[str] = set()
 RUNTIME_CONFIG = dict(settings)
+
+# ── WebSocket connections: board_id → list of connected WebSocket clients ──
+ws_connections: dict[str, list[WebSocket]] = {}
+
+# ── World conversation histories: board_id → list of messages ──
+world_histories: dict[str, list[dict]] = {}
 
 # --- Render API config ---
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
@@ -93,7 +107,10 @@ def get_session(board_id: str):
     return sessions[board_id]
 
 
-# --- MQTT ---
+# ──────────────────────────────────────────────────────────────────────────────
+# MQTT
+# ──────────────────────────────────────────────────────────────────────────────
+
 broker = settings["broker"]
 port = settings.get("mqtt_port", 1883)
 base_topic = settings["topic"].replace("/{BOARD_ID}", "")
@@ -123,9 +140,43 @@ def on_message(client, userdata, msg):
                     print(f"Calibration saved for {board_id}")
             except Exception as e:
                 print(f"Error parsing calibration: {e}")
+
             print(f"📡 Data received from the board {board_id} : {payload}")
+
+            # ── Bridge MQTT → WebSocket clients ──
+            # Run in the event loop to broadcast to all WS clients for this board
+            asyncio.get_event_loop().call_soon_threadsafe(
+                asyncio.ensure_future,
+                broadcast_sensor_data(board_id, payload)
+            )
+
     except Exception as e:
         print(f"Error MQTT: {e}")
+
+
+async def broadcast_sensor_data(board_id: str, raw_payload: str):
+    """Forward raw MQTT sensor payload to all WebSocket clients watching this board."""
+    clients = ws_connections.get(board_id, [])
+    if not clients:
+        return
+
+    # Parse and re-wrap for the frontend
+    try:
+        data = json.loads(raw_payload)
+        message = json.dumps({"board_id": board_id, "data": data})
+    except Exception:
+        message = json.dumps({"board_id": board_id, "data": {"raw": raw_payload}})
+
+    dead = []
+    for ws in clients:
+        try:
+            await ws.send_text(message)
+        except Exception:
+            dead.append(ws)
+
+    # Clean up disconnected clients
+    for ws in dead:
+        clients.remove(ws)
 
 
 def on_connect(client, userdata, flags, rc):
@@ -151,7 +202,10 @@ mqtt_client.connect_async(broker, port)
 mqtt_client.loop_start()
 
 
-# --- Models ---
+# ──────────────────────────────────────────────────────────────────────────────
+# Models
+# ──────────────────────────────────────────────────────────────────────────────
+
 class UserInput(BaseModel):
     text: str
 
@@ -170,7 +224,10 @@ def is_admin(admin_token: str = Cookie(default=None)) -> bool:
     return admin_token in admin_sessions
 
 
-# --- PUBLIC ROUTES ---
+# ──────────────────────────────────────────────────────────────────────────────
+# PUBLIC ROUTES
+# ──────────────────────────────────────────────────────────────────────────────
+
 @app.get("/")
 def get_webpage():
     with open("index.html", "r", encoding="utf-8") as f:
@@ -180,6 +237,13 @@ def get_webpage():
 @app.get("/style.css")
 async def get_style():
     return FileResponse("style.css")
+
+
+@app.get("/world")
+async def get_world_page():
+    """Serve the World Builder interface."""
+    with open("world.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
 
 
 @app.get("/history")
@@ -204,6 +268,10 @@ async def reset_conversation(board_id: str = Query(...)):
     session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
     session["calibrated_sensors"] = {}
     session.pop("pending_hardware_update", None)
+
+    # Also reset world history for this board
+    world_histories.pop(board_id, None)
+
     return {"status": "success"}
 
 
@@ -231,6 +299,9 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
         topic_envoi = f"{base_topic}/{board_id}/command"
         mqtt_client.publish(topic_envoi, json.dumps(valeurs_mqtt), qos=1)
         print(f"📤 Order sent to {board_id} : {valeurs_mqtt}")
+        session["last_hardware_config"] = valeurs_mqtt
+        session["last_hardware_config_at"] = datetime.now().isoformat()
+
 
     session["history"].append({"sender": "ai", "text": texte_ia})
     save_logs_to_file()
@@ -238,7 +309,125 @@ async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
     return {"reply": texte_ia, "MQTT_value": valeurs_mqtt}
 
 
-# --- ADMIN ROUTES ---
+# ──────────────────────────────────────────────────────────────────────────────
+# WORLD BUILDER ENDPOINT
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/world-chat")
+async def world_chat(user_input: UserInput, board_id: str = Query(...)):
+    """
+    Chat endpoint for the World Builder.
+    Uses Claude (Anthropic API) to generate Three.js scenes.
+    Maintains per-board conversation history.
+    """
+    if not WORLD_BUILDER_AVAILABLE:
+        return JSONResponse(
+            {"reply": "World Builder is not available. Make sure world_builder.py and ANTHROPIC_API_KEY are configured.", "world_code": None},
+            status_code=503
+        )
+
+    # Maintain world conversation history per board
+    if board_id not in world_histories:
+        world_histories[board_id] = []
+
+    # Add user message to history
+    world_histories[board_id].append({
+        "role": "user",
+        "content": user_input.text
+    })
+
+    # Build hardware context from the main session
+    hardware_context = build_hardware_context(board_id)
+
+    # Generate response in a thread to avoid blocking
+    result = await asyncio.to_thread(generate_world, world_histories[board_id], hardware_context)
+
+    # Add assistant response to history
+    world_histories[board_id].append({
+        "role": "assistant",
+        "content": json.dumps(result)
+    })
+
+    # Keep history bounded (last 20 exchanges = 40 messages)
+    if len(world_histories[board_id]) > 40:
+        world_histories[board_id] = world_histories[board_id][-40:]
+
+    print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
+
+    return {
+        "reply": result.get("reply", "Here's your world!"),
+        "world_code": result.get("world_code", None)
+    }
+
+def build_hardware_context(board_id: str) -> dict:
+    """Extract the most recent hardware config + calibration from the chat session."""
+    session = sessions.get(board_id)
+    if not session:
+        return {"configured_inputs": [], "last_sensor": None, "calibrated_sensors": {}}
+
+    # Parse the latest hardware schema sent by the main assistant.
+    # Adapt this to wherever you actually store it — typically in history
+    # as the last JSON the LLM produced, or in a dedicated session key.
+    latest_hw = session.get("last_hardware_config")  # store it when /chat publishes to MQTT
+
+    return {
+        "configured_inputs": latest_hw.get("inputs", []) if latest_hw else [],
+        "configured_outputs": latest_hw.get("outputs", []) if latest_hw else [],
+        "last_sensor_value": session.get("last_sensor"),
+        "calibrated_sensors": session.get("calibrated_sensors", {})
+    }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# WEBSOCKET — MQTT → Virtual World bridge
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.websocket("/ws/{board_id}")
+async def websocket_endpoint(websocket: WebSocket, board_id: str):
+    """
+    WebSocket endpoint that bridges MQTT sensor data to the virtual world.
+    Each board_id can have multiple WebSocket clients (e.g. multiple browser tabs).
+    """
+    await websocket.accept()
+
+    if board_id not in ws_connections:
+        ws_connections[board_id] = []
+    ws_connections[board_id].append(websocket)
+
+    print(f"🔌 WebSocket connected for board {board_id} ({len(ws_connections[board_id])} client(s))")
+
+    try:
+        # Send last known sensor state immediately on connect
+        session = get_session(board_id)
+        last_sensor = session.get("last_sensor", "No data")
+        if last_sensor != "No data":
+            try:
+                data = json.loads(last_sensor)
+                await websocket.send_text(json.dumps({"board_id": board_id, "data": data}))
+            except Exception:
+                pass
+
+        # Keep connection alive — wait for pings or disconnect
+        while True:
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30)
+            except asyncio.TimeoutError:
+                # Send keepalive ping
+                await websocket.send_text(json.dumps({"type": "ping"}))
+
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"WebSocket error for {board_id}: {e}")
+    finally:
+        if board_id in ws_connections and websocket in ws_connections[board_id]:
+            ws_connections[board_id].remove(websocket)
+        print(f"🔌 WebSocket disconnected for board {board_id}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ADMIN ROUTES
+# ──────────────────────────────────────────────────────────────────────────────
+
 @app.get("/admin/login")
 async def admin_login_page():
     with open("admin.html", "r", encoding="utf-8") as f:
@@ -296,21 +485,15 @@ async def update_config(data: ConfigUpdate, admin_token: str = Cookie(default=No
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
-    # 1. Persist on Render (will trigger auto-redeploy)
     ok, msg = await update_render_env_var(data.key, data.value)
     if not ok:
         return JSONResponse({"error": f"Render update failed: {msg}"}, status_code=500)
 
-    # 2. Update runtime immediately
     os.environ[data.key] = data.value
     reload_runtime_config()
 
-    # 3. Side-effect OpenAI Assistant
     if data.key == "OPENAI_ASSISTANT_MODEL":
-        if not os.environ.get("OPENAI_API_KEY"):
-            # API key not set yet, model will be applied on next restart
-            pass
-        else:
+        if os.environ.get("OPENAI_API_KEY"):
             ok_ai = await update_assistant_model(data.value)
             if not ok_ai:
                 return JSONResponse({"error": "Failed to update assistant model on OpenAI"}, status_code=500)
@@ -337,30 +520,33 @@ def archive_session(board_id: str, session: dict):
         if os.path.exists("archives.json"):
             with open("archives.json", "r", encoding="utf-8") as f:
                 archives = json.load(f)
-        
+
         if board_id not in archives:
             archives[board_id] = []
-        
+
         archives[board_id].append({
             "archived_at": datetime.now().isoformat(),
             "history": session.get("history", []),
             "calibrated_sensors": session.get("calibrated_sensors", {})
         })
-        
+
         with open("archives.json", "w", encoding="utf-8") as f:
             json.dump(archives, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"Error archiving session: {e}")
+
 
 @app.post("/admin/clear-session")
 async def clear_session(board_id: str = Query(...), admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     if board_id in sessions:
-        archive_session(board_id, sessions[board_id])  # ← archive avant de supprimer
+        archive_session(board_id, sessions[board_id])
         del sessions[board_id]
         save_logs_to_file()
+    world_histories.pop(board_id, None)
     return {"status": "cleared"}
+
 
 @app.get("/admin/archives")
 async def get_archives(admin_token: str = Cookie(default=None)):
@@ -377,6 +563,7 @@ async def clear_all_sessions(admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     sessions.clear()
+    world_histories.clear()
     save_logs_to_file()
     return {"status": "cleared"}
 
@@ -395,11 +582,21 @@ async def test_mqtt(admin_token: str = Cookie(default=None)):
     connected = mqtt_client.is_connected()
     return {"connected": connected, "broker": broker, "port": port}
 
+
+@app.get("/admin/ws-status")
+async def ws_status(admin_token: str = Cookie(default=None)):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return {
+        board_id: len(clients)
+        for board_id, clients in ws_connections.items()
+    }
+
+
 @app.post("/admin/reset-assistant")
 async def reset_assistant(admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    import os
     from pathlib import Path
     state_file = Path(settings["assistant_state_file"])
     if state_file.exists():

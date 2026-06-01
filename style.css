@@ -258,3 +258,52 @@ header {
         transform: translateY(-4px); /* points sautent */
     }
 }
+
+/* ── World Builder button ── */
+.world-btn {
+    background: none;
+    border: 1.5px solid #FF8B33;
+    color: #FF8B33;
+    padding: 5px 13px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+.world-btn:hover {
+    background: #FF8B33;
+    color: #fff;
+}
+.world-btn .dot {
+    width: 6px; height: 6px;
+    background: currentColor;
+    border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* Ajustement header pour accueillir le bouton */
+header {
+    gap: 10px;
+}
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}

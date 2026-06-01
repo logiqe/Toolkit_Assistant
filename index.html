@@ -2,7 +2,6 @@
 <html>
 <head>
     <title>Toolkit Assistant</title>
-    <!-- On lie le fichier CSS ici -->
     <link rel="stylesheet" href="style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#FFE3CE">
@@ -10,8 +9,16 @@
 <body>
 
     <header>
-        <span>Toolkit Assistant</span>
-        <button id="reset-btn" title="Restart">⟳</button>
+        <div class="header-left">
+            <span>Toolkit Assistant</span>
+        </div>
+        <div class="header-right">
+            <a id="world-btn" class="world-btn" href="#">
+                <span class="dot"></span>
+                World Builder
+            </a>
+            <button id="reset-btn" title="Restart">⟳</button>
+        </div>
     </header>
 
     <div id="chatbox">
@@ -35,6 +42,14 @@
 
         if (!boardId) {
             console.error("No board id detected");
+        }
+
+        // ── World Builder button: link avec board_id ──
+        const worldBtn = document.getElementById('world-btn');
+        if (boardId) {
+            worldBtn.href = `/world?board_id=${boardId}`;
+        } else {
+            worldBtn.href = '/world';
         }
 
         async function sendMessage() {
@@ -81,8 +96,7 @@
                 
                 chatbox.scrollTop = chatbox.scrollHeight;
 
-                // 5. NOUVEAU : Vérifier si c'est une commande de calibration
-                // Adapte "data.command" ou "data.MQTT_value.command" selon ce que ton serveur renvoie
+                // 5. Vérifier si c'est une commande de calibration
                 const cmd = data.command || (data.MQTT_value && data.MQTT_value.command);
                 if (cmd && cmd.startsWith("calibrate_")) {
                     startCountdownUi();
@@ -114,7 +128,7 @@
             const timeEl = timerEl.querySelector('.countdown-time');
 
             let timeLeft = 5;
-            let phase = "prep"; // "prep" (5s) puis "calib" (25s)
+            let phase = "prep";
 
             const interval = setInterval(() => {
                 timeLeft--;
@@ -123,14 +137,12 @@
                     timeEl.innerText = timeLeft;
                 } else {
                     if (phase === "prep") {
-                        // Passer à la phase de 25s
                         phase = "calib";
                         timeLeft = 25;
                         titleEl.innerText = "Calibrating...";
                         timerEl.classList.add("recording");
                         timeEl.innerText = timeLeft;
                     } else {
-                        // Terminé !
                         clearInterval(interval);
                         titleEl.innerText = "Calibration done!";
                         timeEl.innerText = "✓";
@@ -159,7 +171,6 @@
 
         async function initPage() {
             try {
-                // MODIFIÉ : On demande l'historique spécifique à cet ID
                 if (boardId) {
                     const response = await fetch(`/history?board_id=${boardId}`);
                     const data = await response.json();
@@ -186,7 +197,6 @@
             }
         }
 
-        // Au chargement de la page, on lance notre nouvelle fonction
         window.onload = initPage;
 
         // Logique du bouton Restart
@@ -194,8 +204,8 @@
             if (confirm("Do you want to start a new conversation?")) {
                 const response = await fetch(`/reset?board_id=${boardId}`, { method: "POST" });
                 if (response.ok) {
-                    chatbox.innerHTML = ""; // Vide l'écran
-                    await loadWelcome();    // Remet le message de bienvenue
+                    chatbox.innerHTML = "";
+                    await loadWelcome();
                 }
             }
         });
