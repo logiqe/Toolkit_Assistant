@@ -370,21 +370,23 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
     }
 
 def build_hardware_context(board_id: str) -> dict:
-    """Extract the most recent hardware config + calibration from the chat session."""
     session = sessions.get(board_id)
     if not session:
-        return {"configured_inputs": [], "last_sensor": None, "calibrated_sensors": {}}
+        return {}
 
-    # Parse the latest hardware schema sent by the main assistant.
-    # Adapt this to wherever you actually store it — typically in history
-    # as the last JSON the LLM produced, or in a dedicated session key.
-    latest_hw = session.get("last_hardware_config")  # store it when /chat publishes to MQTT
+    # Extraire l'historique lisible pour le World Builder
+    chat_history = session.get("history", [])
+    history_text = "\n".join(
+        f"{msg['sender'].upper()}: {msg['text']}" 
+        for msg in chat_history[-20:]  # derniers 20 messages
+    )
 
     return {
-        "configured_inputs": latest_hw.get("inputs", []) if latest_hw else [],
-        "configured_outputs": latest_hw.get("outputs", []) if latest_hw else [],
+        "configured_inputs": [],
+        "configured_outputs": [],
         "last_sensor_value": session.get("last_sensor"),
-        "calibrated_sensors": session.get("calibrated_sensors", {})
+        "calibrated_sensors": session.get("calibrated_sensors", {}),
+        "chat_history": history_text  # ← LE CONTEXTE MANQUANT
     }
 
 # ──────────────────────────────────────────────────────────────────────────────

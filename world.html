@@ -488,8 +488,6 @@ function connectWS() {
         if (frame && frame.contentWindow) {
           frame.contentWindow.postMessage({ type: 'sensor', data }, '*');
         }
-        // Show sensor badge in chat
-        if (anyActive) showSensorBadge(data);
       }
     } catch(e) {}
   };

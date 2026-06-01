@@ -56,6 +56,9 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
         system_prompt = load_system_prompt()
         if hardware_context:
             system_prompt += "\n\n" + format_hardware_context(hardware_context)
+            if hardware_context.get("chat_history"):
+                system_prompt += f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\nThe user already set up their hardware in the main assistant chat. Here's the conversation history for context:\n{hardware_context['chat_history']}"
+
         
         messages = [{"role": "system", "content": system_prompt}] + conversation_history
 
