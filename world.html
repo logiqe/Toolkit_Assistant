@@ -14,7 +14,7 @@
 
 <header>
   <div class="header-left">
-    <a href="/" class="back-btn">← Back</a>
+    <a id="back-btn" href="/" class="back-btn">← Back</a>
     <div class="header-title">TOOLKIT / <span>World Builder</span></div>
   </div>
   <div class="ws-indicator">
@@ -62,6 +62,10 @@
 // ── URL PARAMS ──
 const urlParams = new URLSearchParams(window.location.search);
 const boardId = urlParams.get('board_id');
+
+if (boardId) {
+  document.getElementById('back-btn').href = `/?board_id=${boardId}`;
+}
 
 // ── STATE ──
 let worldCode = null;
