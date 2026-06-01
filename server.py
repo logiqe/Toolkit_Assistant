@@ -380,30 +380,29 @@ def build_hardware_context(board_id: str) -> dict:
         for msg in chat_history[-20:]
     )
 
-    # ── Extraire les composants depuis last_hardware_config ──
-    last_hw = session.get("last_hardware_config", {})
-    
     inputs = []
     outputs = []
-    
-    # last_hardware_config est la valeur MQTT envoyée au board
-    # elle ressemble à {"components": [...]} ou directement une liste
-    components = last_hw.get("components", [])
-    if not components and isinstance(last_hw, list):
-        components = last_hw
-    
-    for comp in components:
-        comp_type = comp.get("type", "").lower()
-        mode = comp.get("mode", comp.get("direction", "input")).lower()
-        entry = {
-            "name": comp.get("name") or comp.get("type"),
-            "type": comp_type,
-            "pin": comp.get("pin", "?")
-        }
-        if mode == "output":
-            outputs.append(entry)
-        else:
-            inputs.append(entry)
+
+    last_hw = session.get("last_hardware_config", {})
+    hw_config = last_hw.get("hardware_config", {})
+
+    # Inputs
+    for name, info in hw_config.get("inputs", {}).items():
+        if info:  # ignorer les null
+            inputs.append({
+                "name": name,
+                "type": info.get("type", ""),
+                "pin": info.get("pin", "?")
+            })
+
+    # Outputs
+    for name, info in hw_config.get("outputs", {}).items():
+        if info:  # ignorer les null
+            outputs.append({
+                "name": name,
+                "type": info.get("type", ""),
+                "pin": info.get("pin", "?")
+            })
 
     return {
         "configured_inputs": inputs,
