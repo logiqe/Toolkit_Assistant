@@ -145,10 +145,11 @@ def on_message(client, userdata, msg):
 
             # ── Bridge MQTT → WebSocket clients ──
             # Run in the event loop to broadcast to all WS clients for this board
-            asyncio.get_event_loop().call_soon_threadsafe(
+            if main_loop:
+                main_loop.call_soon_threadsafe(
                 asyncio.ensure_future,
                 broadcast_sensor_data(board_id, payload)
-            )
+                )
 
     except Exception as e:
         print(f"Error MQTT: {e}")
@@ -227,6 +228,15 @@ def is_admin(admin_token: str = Cookie(default=None)) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC ROUTES
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Au démarrage de l'app
+main_loop = None
+
+@app.on_event("startup")
+async def startup():
+    global main_loop
+    main_loop = asyncio.get_event_loop()
+
 
 @app.get("/")
 def get_webpage():
