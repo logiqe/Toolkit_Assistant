@@ -397,27 +397,27 @@ async def websocket_endpoint(websocket: WebSocket, board_id: str):
 
     try:
         # Send last known sensor state immediately on connect
-        session = get_session(board_id)
-        last_sensor = session.get("last_sensor", "No data")
-        if last_sensor != "No data":
-            try:
+        try:
+            session = get_session(board_id)
+            last_sensor = session.get("last_sensor", "No data")
+            if last_sensor != "No data":
                 data = json.loads(last_sensor)
                 await websocket.send_text(json.dumps({"board_id": board_id, "data": data}))
-            except Exception:
-                pass
+        except Exception as e:
+            print(f"⚠️ Error sending initial state: {e}")
+            # Ne pas fermer la connexion, continuer quand même
 
-        # Keep connection alive — wait for pings or disconnect
+        # Keep connection alive
         while True:
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=30)
             except asyncio.TimeoutError:
-                # Send keepalive ping
                 await websocket.send_text(json.dumps({"type": "ping"}))
 
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WebSocket error for {board_id}: {e}")
+        print(f"❌ WebSocket error for {board_id}: {e}")  # <-- regarde les logs Render
     finally:
         if board_id in ws_connections and websocket in ws_connections[board_id]:
             ws_connections[board_id].remove(websocket)
