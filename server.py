@@ -647,3 +647,29 @@ async def reset_assistant(admin_token: str = Cookie(default=None)):
         state_file.unlink()
         return {"status": "deleted", "file": str(state_file)}
     return {"status": "file not found"}
+
+@app.get("/world-state")
+async def get_world_state(board_id: str = Query(...)):
+    """Return the current world state (chat + latest world code) for a board."""
+    history = world_histories.get(board_id, [])
+    
+    # Reconstruct chat messages for display
+    chat_messages = []
+    latest_world_code = None
+    
+    for msg in history:
+        if msg["role"] == "user":
+            chat_messages.append({"side": "user", "text": msg["content"]})
+        elif msg["role"] == "assistant":
+            try:
+                data = json.loads(msg["content"])
+                chat_messages.append({"side": "ai", "text": data.get("reply", "")})
+                if data.get("world_code"):
+                    latest_world_code = data["world_code"]
+            except:
+                pass
+    
+    return {
+        "chat_messages": chat_messages,
+        "world_code": latest_world_code
+    }

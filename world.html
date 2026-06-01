@@ -14,7 +14,7 @@
 
 <header>
   <div class="header-left">
-    <a href="javascript:history.back()" class="back-btn">← Back</a>
+    <a href="/" class="back-btn">← Back</a>
     <div class="header-title">TOOLKIT / <span>World Builder</span></div>
   </div>
   <div class="ws-indicator">
@@ -326,16 +326,36 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
 });
 
 // ── INIT ──
-(function() {
-  const hasHistory = loadChatHistory();
-  if (!hasHistory) {
+(async function() {
+  try {
+    const res = await fetch(`/world-state?board_id=${boardId || 'none'}`);
+    const data = await res.json();
+    
+    const chatbox = document.getElementById('chatbox');
+    
+    if (data.chat_messages && data.chat_messages.length > 0) {
+      // Restore chat
+      data.chat_messages.forEach(({ side, text }) => {
+        const msg = document.createElement('div');
+        msg.className = `msg ${side}`;
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${side}`;
+        bubble.textContent = text;
+        msg.appendChild(bubble);
+        chatbox.appendChild(msg);
+      });
+      chatbox.scrollTop = chatbox.scrollHeight;
+    } else {
+      showWelcome();
+    }
+    
+    // Restore world
+    if (data.world_code) {
+      injectWorld(data.world_code);
+    }
+    
+  } catch(e) {
     showWelcome();
-  }
-
-  // Restore last world if exists
-  const savedCode = localStorage.getItem(WORLD_CODE_KEY);
-  if (savedCode) {
-    injectWorld(savedCode);
   }
 })();
 </script>
