@@ -98,7 +98,7 @@ function loadChatHistory() {
       const msg = document.createElement('div');
       msg.className = `msg ${side}`;
       const bubble = document.createElement('div');
-      bubble.className = 'bubble';
+      bubble.className = `bubble ${side}`;  
       bubble.innerHTML = html;
       msg.appendChild(bubble);
       chatbox.appendChild(msg);
@@ -197,7 +197,7 @@ function addMsg(side, text) {
   const msg = document.createElement('div');
   msg.className = `msg ${side}`;
   const bubble = document.createElement('div');
-  bubble.className = 'bubble';
+  bubble.className = `bubble ${side}`;  
   bubble.textContent = text;
   msg.appendChild(bubble);
   chatbox.appendChild(msg);
@@ -226,9 +226,9 @@ function removeLoading() {
 function showWelcome() {
   const chatbox = document.getElementById('chatbox');
   const msg = document.createElement('div');
-  msg.className = 'msg ai';
+  msg.className = 'msg ai';               
   const bubble = document.createElement('div');
-  bubble.className = 'bubble';
+  bubble.className = 'bubble ai';        
   bubble.innerHTML = `<strong>World Builder</strong><br><br>Describe the 3D world you want to create. Your physical sensors will interact with it in real time.<br><br><em style="opacity:0.6">Try: "A calm ocean at night, the water ripples when I press the button"</em>`;
   msg.appendChild(bubble);
   chatbox.appendChild(msg);

@@ -422,8 +422,13 @@ header {
     flex-direction: column;
     gap: 3px;
   }
-  .world-page .msg.user { align-items: flex-end; }
-  .world-page .msg.ai   { align-items: flex-start; }
+  .world-page .msg.user {
+    align-items: flex-end !important;
+  }
+  
+  .world-page .msg.ai {
+    align-items: flex-start !important;
+  }
   
   .world-page .bubble {
     max-width: 85%;
@@ -447,6 +452,22 @@ header {
     border-bottom-left-radius: 4px;
     font-weight: 300;
   }
+
+  .world-page .bubble.user,
+.world-page .msg.user .bubble {
+  background: var(--accent) !important;
+  color: #1a0a00 !important;
+  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 12px;
+}
+
+.world-page .bubble.ai,
+.world-page .msg.ai .bubble {
+  background: var(--ai-bg) !important;
+  color: var(--text) !important;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 12px;
+}
   
   /* ── Typing indicator (world) ── */
   .world-page .typing-indicator {
@@ -455,7 +476,8 @@ header {
     gap: 4px;
     height: 20px;
     padding: 10px 14px;
-    background: var(--ai-bg);
+    background: var(--ai-bg) !important;
+    color: var(--text-muted) !important;
     border: 1px solid var(--border);
     border-radius: 12px;
     border-bottom-left-radius: 4px;
@@ -463,7 +485,7 @@ header {
   }
   .world-page .typing-indicator span {
     width: 5px; height: 5px;
-    background: var(--text-muted);
+    background: var(--text-muted) !important;
     border-radius: 50%;
     animation: bounce 1.2s infinite both;
   }
