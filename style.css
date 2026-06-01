@@ -110,14 +110,14 @@ header {
 }
 
 /* User style */
-.user { 
+#chatbox .bubble.user { 
     background-color: #5E2A03; 
     color: white; 
     border-bottom-right-radius: 4px;
 }
 
 /* AI style */
-.ai { 
+#chatbox .bubble.ai { 
     background-color: #FF8B33; 
     color: #5E2A03; 
     border-bottom-left-radius: 4px;
@@ -416,20 +416,16 @@ header {
   .world-page #chatbox::-webkit-scrollbar-track { background: transparent; }
   .world-page #chatbox::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
   
-  /* ── Messages ── */
-  .world-page .msg {
+/* ── Messages ── */
+.world-page .msg {
     display: flex;
     flex-direction: column;
     gap: 3px;
   }
-  .world-page .msg.user {
-    align-items: flex-end !important;
-  }
+  .world-page .msg.user { align-items: flex-end; }
+  .world-page .msg.ai   { align-items: flex-start; }
   
-  .world-page .msg.ai {
-    align-items: flex-start !important;
-  }
-  
+  /* Reset complet du .bubble global dans world-page */
   .world-page .bubble {
     max-width: 85%;
     padding: 10px 14px;
@@ -438,36 +434,29 @@ header {
     line-height: 1.5;
     word-break: break-word;
     box-shadow: none;
+    /* Écrase les styles globaux */
+    background: none;
+    color: inherit;
     border: 1px solid var(--border);
   }
-  .world-page .msg.user .bubble {
-    background: var(--accent);
-    color: #1a0a00;
+  
+  /* User bubble */
+  .world-page .bubble.user {
+    background: var(--accent) !important;
+    color: #1a0a00 !important;
     font-weight: 500;
-    border-bottom-right-radius: 4px;
+    border-color: transparent !important;
+    border-radius: 12px 12px 4px 12px !important;
   }
-  .world-page .msg.ai .bubble {
-    background: var(--ai-bg);
-    color: var(--text);
-    border-bottom-left-radius: 4px;
+  
+  /* AI bubble */
+  .world-page .bubble.ai {
+    background: var(--ai-bg) !important;
+    color: var(--text) !important;
     font-weight: 300;
-  }
-
-  .world-page .bubble.user,
-.world-page .msg.user .bubble {
-  background: var(--accent) !important;
-  color: #1a0a00 !important;
-  border-bottom-right-radius: 4px;
-  border-bottom-left-radius: 12px;
-}
-
-.world-page .bubble.ai,
-.world-page .msg.ai .bubble {
-  background: var(--ai-bg) !important;
-  color: var(--text) !important;
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 12px;
-}
+    border-color: var(--border) !important;
+    border-radius: 12px 12px 12px 4px !important;
+  }  
   
   /* ── Typing indicator (world) ── */
   .world-page .typing-indicator {
