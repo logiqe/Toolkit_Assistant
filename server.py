@@ -28,6 +28,8 @@ sessions = {}
 admin_sessions: set[str] = set()
 RUNTIME_CONFIG = dict(settings)
 
+WORLD_STATE_FILE = "world_states.json"
+
 # ── WebSocket connections: board_id → list of connected WebSocket clients ──
 ws_connections: dict[str, list[WebSocket]] = {}
 
@@ -90,6 +92,18 @@ def save_logs_to_file():
     except Exception as e:
         print(f"Error while saving logs: {e}")
 
+def save_world_states():
+    with open(WORLD_STATE_FILE, "w") as f:
+        json.dump(world_histories, f)
+
+def load_world_states():
+    global world_histories
+    if os.path.exists(WORLD_STATE_FILE):
+        with open(WORLD_STATE_FILE, "r") as f:
+            world_histories = json.load(f)
+
+# Au démarrage du serveur
+load_world_states()
 
 @app.on_event("startup")
 async def startup_event():
@@ -345,6 +359,7 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
         "role": "user",
         "content": user_input.text
     })
+    save_world_states()
 
     # Build hardware context from the main session
     hardware_context = build_hardware_context(board_id)
@@ -357,6 +372,7 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
         "role": "assistant",
         "content": json.dumps(result)
     })
+    save_world_states()
 
     # Keep history bounded (last 20 exchanges = 40 messages)
     if len(world_histories[board_id]) > 40:
