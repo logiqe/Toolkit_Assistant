@@ -374,24 +374,57 @@ def build_hardware_context(board_id: str) -> dict:
     if not session:
         return {}
 
-    # Extraire l'historique lisible pour le World Builder
     chat_history = session.get("history", [])
     history_text = "\n".join(
         f"{msg['sender'].upper()}: {msg['text']}" 
-        for msg in chat_history[-20:]  # derniers 20 messages
+        for msg in chat_history[-20:]
     )
 
+    # ── Extraire les composants depuis last_hardware_config ──
+    last_hw = session.get("last_hardware_config", {})
+    
+    inputs = []
+    outputs = []
+    
+    # last_hardware_config est la valeur MQTT envoyée au board
+    # elle ressemble à {"components": [...]} ou directement une liste
+    components = last_hw.get("components", [])
+    if not components and isinstance(last_hw, list):
+        components = last_hw
+    
+    for comp in components:
+        comp_type = comp.get("type", "").lower()
+        mode = comp.get("mode", comp.get("direction", "input")).lower()
+        entry = {
+            "name": comp.get("name") or comp.get("type"),
+            "type": comp_type,
+            "pin": comp.get("pin", "?")
+        }
+        if mode == "output":
+            outputs.append(entry)
+        else:
+            inputs.append(entry)
+
     return {
-        "configured_inputs": [],
-        "configured_outputs": [],
+        "configured_inputs": inputs,
+        "configured_outputs": outputs,
         "last_sensor_value": session.get("last_sensor"),
         "calibrated_sensors": session.get("calibrated_sensors", {}),
-        "chat_history": history_text  # ← LE CONTEXTE MANQUANT
+        "chat_history": history_text
     }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # WEBSOCKET — MQTT → Virtual World bridge
 # ──────────────────────────────────────────────────────────────────────────────
+
+@app.get("/debug/hardware")
+async def debug_hardware(board_id: str = Query(...)):
+    session = sessions.get(board_id, {})
+    return {
+        "last_hardware_config": session.get("last_hardware_config"),
+        "hardware_context": build_hardware_context(board_id)
+    }
+
 
 @app.websocket("/ws/{board_id}")
 async def websocket_endpoint(websocket: WebSocket, board_id: str):
