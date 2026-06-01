@@ -108,6 +108,8 @@ load_world_states()
 @app.on_event("startup")
 async def startup_event():
     load_logs_from_file()
+    load_world_states()
+    print(f"🚀 Server started — {len(world_histories)} world states loaded")
 
 
 def get_session(board_id: str):
