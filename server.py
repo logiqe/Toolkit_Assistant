@@ -134,6 +134,7 @@ mqtt_auth = {'username': settings["mqtt_user"], 'password': settings["mqtt_passw
 
 
 def on_message(client, userdata, msg):
+    print(f"MQTT reçu à : {datetime.now().isoformat()}")
     try:
         payload = msg.payload.decode("utf-8")
         parts = msg.topic.split("/")

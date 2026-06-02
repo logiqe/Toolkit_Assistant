@@ -164,6 +164,7 @@ function connectWS() {
   };
 
   ws.onmessage = (event) => {
+    console.log('WS reçu à :', Date.now());
     try {
       const msg = JSON.parse(event.data);
       const data = msg.data || msg;
