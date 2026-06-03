@@ -8,7 +8,7 @@ The generated HTML is self-contained and includes a sensor bridge (postMessage).
 import json
 import os
 import re
-from openai import OpenAI
+import anthropic
 from pathlib import Path
 
 _client = None
@@ -35,10 +35,10 @@ def reload_system_prompt() -> str:
 def get_client():
     global _client
     if _client is None:
-        key = os.environ.get("OPENAI_API_KEY")
+        key = os.environ.get("ANTHROPIC_API_KEY")
         if not key:
-            raise RuntimeError("OPENAI_API_KEY not set.")
-        _client = OpenAI(api_key=key)
+            raise RuntimeError("ANTHROPIC_API_KEY not set.")
+        _client = anthropic.Anthropic(api_key=key)
     return _client
 
 def sanitize_world_code(html: str) -> str:
@@ -111,29 +111,25 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
         )
 
         create_kwargs = {
-            "model": "gpt-4o",
+            "model": "claude-opus-4-5",
             "max_tokens": 8000,
-            "messages": messages,
+            "system": system_prompt,
+            "messages": conversation_history,
         }
+
         # json_object mode is incompatible with vision messages in some API versions
         if not has_vision:
-            create_kwargs["response_format"] = {"type": "json_object"}
-        else:
-            last_content = create_kwargs["messages"][-1]["content"]
-            if isinstance(last_content, list):
-                last_content = last_content
-            else:
+            last_content = conversation_history[-1]["content"]
+            if not isinstance(last_content, list):
                 last_content = [{"type": "text", "text": last_content}]
-
             last_content.append({
                 "type": "text",
                 "text": 'IMPORTANT: Respond ONLY with a valid JSON object {"reply": "...", "world_code": "..."}'
             })
-            create_kwargs["messages"][-1]["content"] = last_content
+            conversation_history[-1]["content"] = last_content
 
-        response = client.chat.completions.create(**create_kwargs)
-
-        raw = response.choices[0].message.content.strip()
+        response = client.messages.create(**create_kwargs)
+        raw = response.content[0].text.strip()
 
         try:
             result = json.loads(raw)

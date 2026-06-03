@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 openai
+anthropic
 python-dotenv
 paho-mqtt
 python-multipart

@@ -393,10 +393,10 @@
                     <input type="password" id="cfg-openai-key" placeholder="sk-...">
                 </div>
             </div>
-
+            
             <div class="field">
-                <label>Welcome message</label>
-                <input type="text" id="cfg-welcome" placeholder="Welcome! How can I help?">
+                <label>Anthropic API Key</label>
+                <input type="password" id="cfg-anthropic-key" placeholder="sk-ant-...">
             </div>
 
             <div class="section-actions">
@@ -563,6 +563,10 @@
         document.getElementById("cfg-mqtt-user").value = cfg["MQTT_USER"] || cfg["mqtt_user"] || "";
         const hasPw = cfg["MQTT_PASSWORD"] && cfg["MQTT_PASSWORD"].length > 0;
         document.getElementById("cfg-mqtt-password").placeholder = hasPw ? "•••••••• (saved)" : "password";
+
+        const hasAnthropicKey = cfg["ANTHROPIC_API_KEY"] && cfg["ANTHROPIC_API_KEY"].length > 0;
+        document.getElementById("cfg-anthropic-key").placeholder = hasAnthropicKey ? "•••••••• (saved)" : "sk-ant-...";
+
     }
 
     async function saveField(key, value) {
@@ -586,6 +590,11 @@
             // 1. API key EN PREMIER (nécessaire pour update l'assistant)
             if (apiKey && apiKey.startsWith("sk-")) {
                 await saveField("OPENAI_API_KEY", apiKey);
+            }
+
+            const anthropicKey = document.getElementById("cfg-anthropic-key").value;
+            if (anthropicKey && anthropicKey.startsWith("sk-ant-")) {
+                await saveField("ANTHROPIC_API_KEY", anthropicKey);
             }
 
             // 2. Ensuite le modèle
