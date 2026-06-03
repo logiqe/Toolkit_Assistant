@@ -27,6 +27,17 @@ You MUST always respond with a JSON object containing exactly two keys:
 
 For world_code: escape all backticks as \` and all backslashes as \\ inside the JSON string.
 
+## CRITICAL: DOM Safety
+Always wrap ALL JavaScript code in a DOMContentLoaded listener:
+```html
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // ALL your code here
+});
+</script>
+```
+Never access document.body or any DOM element outside this wrapper.
+
 ---
 
 ## 2. CONVERSATION RULES

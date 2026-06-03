@@ -510,7 +510,11 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
         msg.className = `msg ${side}`;
         const bubble = document.createElement('div');
         bubble.className = `bubble ${side}`;
-        bubble.textContent = text;
+        const displayText = Array.isArray(text)
+          ? text.filter(b => b.type === 'text').map(b => b.text).join(' ')
+          : (typeof text === 'string' ? text : JSON.stringify(text));
+        
+        bubble.textContent = displayText;
         msg.appendChild(bubble);
         chatbox.appendChild(msg);
       });

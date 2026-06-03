@@ -45,9 +45,18 @@ def get_client():
 
 def sanitize_world_code(html: str) -> str:
     """Fix common LLM-generated JS escape issues."""
-    # Seulement dans les chemins de fichiers (loader.load('...')), pas partout
+    # Fix chemins de fichiers
     html = re.sub(r"load\('([^']*)'\)", lambda m: "load('" + m.group(1).replace("\\", "/") + "')", html)
     html = re.sub(r'load\("([^"]*)"\)', lambda m: 'load("' + m.group(1).replace("\\", "/") + '")', html)
+    
+    # Fix scripts sans defer/DOMContentLoaded
+    # Remplacer <script> par <script defer> dans le <head>
+    html = re.sub(
+        r'<script(?!\s+(?:src|type|defer|async)[^>]*defer)([^>]*)>',
+        lambda m: f'<script{m.group(1)} defer>' if 'src=' in m.group(1) else m.group(0),
+        html
+    )
+    
     return html
 
 def format_hardware_context(ctx: dict) -> str:
