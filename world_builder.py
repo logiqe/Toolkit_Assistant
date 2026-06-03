@@ -87,6 +87,52 @@ def format_hardware_context(ctx: dict) -> str:
 
     return "\n".join(lines)
 
+def convert_messages_for_anthropic(messages: list[dict]) -> list[dict]:
+    """Convert OpenAI-format messages to Anthropic format."""
+    converted = []
+    for msg in messages:
+        if msg["role"] == "system":
+            continue  # system est géré séparément
+        
+        content = msg["content"]
+        
+        if isinstance(content, list):
+            new_content = []
+            for block in content:
+                if block.get("type") == "image_url":
+                    # Convertir format OpenAI → Anthropic
+                    url = block["image_url"]["url"]
+                    if url.startswith("data:"):
+                        # base64 data URL
+                        match = re.match(r"data:([^;]+);base64,(.+)", url)
+                        if match:
+                            media_type = match.group(1)
+                            data = match.group(2)
+                            new_content.append({
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": data,
+                                }
+                            })
+                    else:
+                        # URL normale
+                        new_content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "url",
+                                "url": url,
+                            }
+                        })
+                else:
+                    new_content.append(block)
+            converted.append({"role": msg["role"], "content": new_content})
+        else:
+            converted.append({"role": msg["role"], "content": content})
+    
+    return converted
+
 def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
     """
     Given a conversation history, generate a 3D world or a chat reply.
@@ -116,7 +162,7 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
             "model": "claude-opus-4-5",
             "max_tokens": 8000,
             "system": system_prompt,
-            "messages": conversation_history,
+            "messages": convert_messages_for_anthropic(conversation_history),
         }
 
         # json_object mode is incompatible with vision messages in some API versions
