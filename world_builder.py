@@ -9,6 +9,7 @@ import json
 import os
 import re
 import anthropic
+import copy
 from pathlib import Path
 
 _client = None
@@ -143,71 +144,70 @@ def convert_messages_for_anthropic(messages: list[dict]) -> list[dict]:
     return converted
 
 def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
-    """
-    Given a conversation history, generate a 3D world or a chat reply.
-    Uses the chat completions API (not the Assistants API) for simplicity.
-    Returns: { "reply": str, "world_code": str | None }
-    """
     try:
         client = get_client()
 
-        # Build messages: system prompt + conversation history
         system_prompt = load_system_prompt()
         if hardware_context:
             system_prompt += "\n\n" + format_hardware_context(hardware_context)
             if hardware_context.get("chat_history"):
-                system_prompt += f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\nThe user already set up their hardware in the main assistant chat. Here's the conversation history for context:\n{hardware_context['chat_history']}"
+                system_prompt += (
+                    f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\n"
+                    f"The user already set up their hardware in the main assistant chat. "
+                    f"Here's the conversation history for context:\n{hardware_context['chat_history']}"
+                )
 
-        
-        messages = [{"role": "system", "content": system_prompt}] + conversation_history
-
-        # Detect if any message contains image content (vision call)
+        # Detect vision content BEFORE copying
         has_vision = any(
             isinstance(msg.get("content"), list)
             for msg in conversation_history
         )
 
-        create_kwargs = {
-            "model": "claude-opus-4-5",
-            "max_tokens": 8000,
-            "system": system_prompt,
-            "messages": convert_messages_for_anthropic(conversation_history),
-        }
+        # Always work on a deep copy — never mutate the caller's history
+        messages_copy = copy.deepcopy(conversation_history)
 
-        # json_object mode is incompatible with vision messages in some API versions
         if not has_vision:
-            last_content = conversation_history[-1]["content"]
-            if not isinstance(last_content, list):
-                last_content = [{"type": "text", "text": last_content}]
-            last_content.append({
+            last = messages_copy[-1]
+            if isinstance(last["content"], str):
+                last["content"] = [{"type": "text", "text": last["content"]}]
+            last["content"].append({
                 "type": "text",
                 "text": 'IMPORTANT: Respond ONLY with a valid JSON object {"reply": "...", "world_code": "..."}'
             })
-            conversation_history[-1]["content"] = last_content
 
-        response = client.messages.create(**create_kwargs)
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=8000,
+            system=system_prompt,
+            messages=convert_messages_for_anthropic(messages_copy),
+        )
         raw = response.content[0].text.strip()
+        print(f"[world_builder] raw response (first 500):\n{raw[:500]}")
 
         try:
             result = json.loads(raw)
         except json.JSONDecodeError:
-            # Fallback: extraire le bloc JSON
             json_match = re.search(r'\{.*\}', raw, re.DOTALL)
             if json_match:
                 try:
                     result = json.loads(json_match.group())
                 except json.JSONDecodeError:
+                    print(f"[world_builder] JSON parse failed. Full raw:\n{raw[:2000]}")
                     return {"reply": raw[:500], "world_code": None}
             else:
+                print(f"[world_builder] No JSON found. Full raw:\n{raw[:2000]}")
                 return {"reply": raw[:500], "world_code": None}
 
+        world_code = result.get("world_code") or ""
         return {
             "reply": result.get("reply", "Here's your world!"),
-            "world_code": sanitize_world_code(result.get("world_code") or "") or None
+            "world_code": sanitize_world_code(world_code) or None,
         }
 
     except Exception as e:
+        import traceback
+        print(f"[world_builder] Exception:\n{traceback.format_exc()}")
         return {
             "reply": f"Error generating world: {str(e)}",
-            "world_code": None
+            "world_code": None,
         }
