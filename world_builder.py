@@ -34,10 +34,12 @@ def reload_system_prompt() -> str:
 
 def get_client():
     global _client
-    if _client is None:
-        key = os.environ.get("ANTHROPIC_API_KEY")
-        if not key:
-            raise RuntimeError("ANTHROPIC_API_KEY not set.")
+    # Toujours recréer si la clé a changé
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set.")
+    # Recréer le client si pas encore créé ou si la clé a changé
+    if _client is None or _client.api_key != key:
         _client = anthropic.Anthropic(api_key=key)
     return _client
 
