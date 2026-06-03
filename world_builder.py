@@ -181,22 +181,21 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
 
         try:
             result = json.loads(raw)
-            return {
-                "reply": result.get("reply", "Here's your world!"),
-                "world_code": sanitize_world_code(result.get("world_code", None) or "")
-                        or None
-            }
         except json.JSONDecodeError:
-            # Fallback: try to extract JSON block
+            # Fallback: extraire le bloc JSON
             json_match = re.search(r'\{.*\}', raw, re.DOTALL)
             if json_match:
-                result = json.loads(json_match.group())
-                return {
-                    "reply": result.get("reply", "Here's your world!"),
-                    "world_code": sanitize_world_code(result.get("world_code", None) or "")
-                            or None
-                }
-            return {"reply": raw[:300], "world_code": None}
+                try:
+                    result = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    return {"reply": raw[:500], "world_code": None}
+            else:
+                return {"reply": raw[:500], "world_code": None}
+
+        return {
+            "reply": result.get("reply", "Here's your world!"),
+            "world_code": sanitize_world_code(result.get("world_code") or "") or None
+        }
 
     except Exception as e:
         return {

@@ -25,6 +25,8 @@ You MUST always respond with a JSON object containing exactly two keys:
 - - Explain the code in `reply`
 - - Return partial HTML (always a complete document)
 
+For world_code: escape all backticks as \` and all backslashes as \\ inside the JSON string.
+
 ---
 
 ## 2. CONVERSATION RULES
