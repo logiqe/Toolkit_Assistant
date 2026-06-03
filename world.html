@@ -121,18 +121,23 @@ function loadChatHistory() {
   }
 }
 
-function clearHistory() {
+async function clearHistory() {
   if (!confirm('Clear chat and world? This cannot be undone.')) return;
+  
+  // Vider côté serveur
+  await fetch(`/world-clear?board_id=${boardId || 'none'}`, { method: 'POST' });
+  
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(WORLD_CODE_KEY);
-  // Reset chat
+  localStorage.removeItem('world_code_latest');
+  
   const chatbox = document.getElementById('chatbox');
   chatbox.innerHTML = '';
   showWelcome();
-  // Reset world
+  
   const frame = document.getElementById('world-frame');
   frame.style.display = 'none';
-  frame.src = '';
+  frame.srcdoc = '';
   worldCode = null;
   document.getElementById('emptyState').style.display = 'flex';
 }

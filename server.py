@@ -783,3 +783,9 @@ async def get_world_state(board_id: str = Query(...)):
         "chat_messages": chat_messages,
         "world_code": latest_world_code
     }
+
+@app.post("/world-clear")
+async def clear_world_history(board_id: str = Query(...)):
+    world_histories.pop(board_id, None)
+    save_world_states()
+    return {"status": "cleared"}
