@@ -344,6 +344,11 @@ async function sendMessage() {
     if (data.world_code) {
       injectWorld(data.world_code);
       localStorage.setItem(WORLD_CODE_KEY, data.world_code);
+      localStorage.setItem('world_code_latest', data.world_code); // ← ajoute ça
+    } else {
+      const saved = localStorage.getItem(WORLD_CODE_KEY) 
+                || localStorage.getItem('world_code_latest');
+      if (saved) injectWorld(saved);
     }
     saveChatHistory();
 
@@ -512,8 +517,17 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
     // Restore world
     if (data.world_code) {
       injectWorld(data.world_code);
+    } else {
+      // Fallback: try localStorage (covers board_id change case)
+      const saved = localStorage.getItem(WORLD_CODE_KEY);
+      if (saved) {
+        injectWorld(saved);
+      } else {
+        // Try the 'none' key as last resort
+        const savedLatest = localStorage.getItem('world_code_latest');
+        if (savedLatest) injectWorld(savedLatest);
+      }
     }
-    
   } catch(e) {
     showWelcome();
   }
