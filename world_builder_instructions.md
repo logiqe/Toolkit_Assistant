@@ -248,12 +248,21 @@ These are passed as text notes (filename + size). Since Three.js r128 in a sandb
 * **Combined (image + 3D + text):**
 When multiple assets are present alongside a text description, treat the text as the primary intent and assets as visual references. The text overrides conflicting signals from files.
 
-### CRITICAL RULES
-- NEVER use OBJLoader, GLTFLoader, or any external file loader
-- NEVER reference local file paths or uploaded files
-- ALWAYS build geometry using Three.js primitives only:
-  BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry, TorusGeometry, etc.
-- The HTML must be 100% self-contained with zero external dependencies except Three.js CDN
+### LOADING 3D ASSETS
+If the user's message contains a 3D asset URL (e.g. `/uploads/xxxx_lamp.obj`),
+load it with OBJLoader from the Three.js CDN
+```html
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+const loader = new THREE.OBJLoader();
+loader.load('URL_HERE', (obj) => {
+  obj.position.set(0, 0, 0);
+  scene.add(obj);
+});
+```
+The URL is publicly accessible — always use it directly, never skip it.
+
+#### `world.html` — iframe sandbox doit autoriser les requêtes
+L'iframe a `sandbox="allow-scripts allow-same-origin"` — c'est bon, `allow-same-origin` permet les fetch vers ton serveur.
 
 
 ## 12. PASSTHROUGH / TRANSPARENT BACKGROUND (Meta Quest AR)

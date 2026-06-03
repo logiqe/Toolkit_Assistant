@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Query, Request, Response, Cookie, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+import uuid
 from pydantic import BaseModel
 from datetime import datetime
 import asyncio
@@ -11,6 +13,7 @@ import base64
 import httpx
 import paho.mqtt.client as mqtt
 
+from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
 
@@ -20,9 +23,12 @@ try:
     WORLD_BUILDER_AVAILABLE = True
 except ImportError:
     WORLD_BUILDER_AVAILABLE = False
-    print("⚠️  world_builder.py not found — /world-chat will be unavailable")
+    print("world_builder.py not found — /world-chat will be unavailable")
 
 app = FastAPI()
+
+Path("uploads").mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Global state ---
 sessions = {}
@@ -428,11 +434,18 @@ async def world_chat_with_files(
             })
         elif ext in SUPPORTED_3D_EXTENSIONS:
             data = await upload.read()
-            size_kb = len(data) // 1024
+            # Sauvegarder le fichier
+            upload_dir = Path("uploads")
+            upload_dir.mkdir(exist_ok=True)
+            unique_name = f"{uuid.uuid4().hex}_{upload.filename}"
+            (upload_dir / unique_name).write_bytes(data)
+            public_url = f"/uploads/{unique_name}"
+
+            # URL absolue pour résoudre le problème du Blob URL dans l'iframe
             asset_notes.append(
-                f"3D asset {upload.filename!r} ({size_kb} KB, {ext[1:].upper()}). "
-                "Since Three.js r128 cannot load external files in a sandboxed iframe, "
-                "use this asset visual style as inspiration for procedural geometry."
+                f"3D asset '{upload.filename}' is available at absolute URL: "
+                f"http://localhost:8000{public_url} — "
+                f"IMPORTANT: use this EXACT full URL in loader.load(), never a relative path."
             )
         else:
             asset_notes.append(f"File {upload.filename!r} ignored (unsupported).")

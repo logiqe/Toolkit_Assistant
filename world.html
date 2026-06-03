@@ -419,7 +419,7 @@ function injectWorld(html) {
   const blob = new Blob([injected], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
 
-  frame.src = url;
+  frame.srcdoc = injected;
   frame.style.display = 'block';
   emptyState.style.display = 'none';
 
