@@ -318,7 +318,9 @@ window._sceneBg = scene.background; // save original background
 Always include in every generated scene:
 
 1. Script tags in <head>:
+```html
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+```
 
 2. After renderer creation:
 renderer.xr.enabled = true;
