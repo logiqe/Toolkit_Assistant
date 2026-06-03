@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Request, Response, Cookie, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Query, Request, Response, Cookie, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from datetime import datetime
@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import secrets
+import base64
 import httpx
 import paho.mqtt.client as mqtt
 
@@ -387,6 +388,83 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
         "reply": result.get("reply", "Here's your world!"),
         "world_code": result.get("world_code", None)
     }
+
+
+@app.post("/world-chat-with-files")
+async def world_chat_with_files(
+    board_id: str = Query(...),
+    text: str = Form(""),
+    files: list[UploadFile] = File(default=[])
+):
+    """
+    World Builder chat with file uploads.
+    Images → GPT-4o vision. 3D files → context notes.
+    """
+    if not WORLD_BUILDER_AVAILABLE:
+        return JSONResponse({"reply": "World Builder is not available.", "world_code": None}, status_code=503)
+
+    SUPPORTED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+    SUPPORTED_3D_EXTENSIONS = {".glb", ".gltf", ".obj"}
+    MAX_IMAGE_SIZE = 4 * 1024 * 1024
+    MAX_FILE_COUNT = 4
+
+    image_parts = []
+    asset_notes = []
+
+    for upload in files[:MAX_FILE_COUNT]:
+        ext = os.path.splitext(upload.filename or "")[1].lower()
+        content_type = upload.content_type or ""
+
+        if content_type in SUPPORTED_IMAGE_TYPES or ext in {".png", ".jpg", ".jpeg", ".gif", ".webp"}:
+            data = await upload.read()
+            if len(data) > MAX_IMAGE_SIZE:
+                asset_notes.append(f"Image {upload.filename!r} skipped (>4 MB).")
+                continue
+            mime = content_type if content_type in SUPPORTED_IMAGE_TYPES else "image/png"
+            b64 = base64.b64encode(data).decode("utf-8")
+            image_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{b64}", "detail": "high"}
+            })
+        elif ext in SUPPORTED_3D_EXTENSIONS:
+            data = await upload.read()
+            size_kb = len(data) // 1024
+            asset_notes.append(
+                f"3D asset {upload.filename!r} ({size_kb} KB, {ext[1:].upper()}). "
+                "Since Three.js r128 cannot load external files in a sandboxed iframe, "
+                "use this asset visual style as inspiration for procedural geometry."
+            )
+        else:
+            asset_notes.append(f"File {upload.filename!r} ignored (unsupported).")
+
+    user_text = text.strip()
+    if asset_notes:
+        user_text += "\n\n[Files: " + " | ".join(asset_notes) + "]"
+    if not user_text:
+        user_text = "(User uploaded files without a text message)"
+
+    if board_id not in world_histories:
+        world_histories[board_id] = []
+
+    content_parts = [{"type": "text", "text": user_text}] + image_parts
+    world_histories[board_id].append({
+        "role": "user",
+        "content": content_parts if image_parts else user_text
+    })
+    save_world_states()
+
+    hardware_context = build_hardware_context(board_id)
+    result = await asyncio.to_thread(generate_world, world_histories[board_id], hardware_context)
+
+    world_histories[board_id].append({"role": "assistant", "content": json.dumps(result)})
+    save_world_states()
+
+    if len(world_histories[board_id]) > 40:
+        world_histories[board_id] = world_histories[board_id][-40:]
+
+    print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
+    return {"reply": result.get("reply", "Here's your world!"), "world_code": result.get("world_code", None)}
+
 
 def build_hardware_context(board_id: str) -> dict:
     session = sessions.get(board_id)

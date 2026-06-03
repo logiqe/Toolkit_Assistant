@@ -42,58 +42,6 @@ def get_client():
         _client = OpenAI(api_key=key)
     return _client
 
-
-def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
-    """
-    Given a conversation history, generate a 3D world or a chat reply.
-    Uses the chat completions API (not the Assistants API) for simplicity.
-    Returns: { "reply": str, "world_code": str | None }
-    """
-    try:
-        client = get_client()
-
-        # Build messages: system prompt + conversation history
-        system_prompt = load_system_prompt()
-        if hardware_context:
-            system_prompt += "\n\n" + format_hardware_context(hardware_context)
-            if hardware_context.get("chat_history"):
-                system_prompt += f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\nThe user already set up their hardware in the main assistant chat. Here's the conversation history for context:\n{hardware_context['chat_history']}"
-
-        
-        messages = [{"role": "system", "content": system_prompt}] + conversation_history
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=8000,
-            response_format={"type": "json_object"},  # forces valid JSON output
-            messages=messages,
-        )
-
-        raw = response.choices[0].message.content.strip()
-
-        try:
-            result = json.loads(raw)
-            return {
-                "reply": result.get("reply", "Here's your world!"),
-                "world_code": result.get("world_code", None)
-            }
-        except json.JSONDecodeError:
-            # Fallback: try to extract JSON block
-            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return {
-                    "reply": result.get("reply", "Here's your world!"),
-                    "world_code": result.get("world_code", None)
-                }
-            return {"reply": raw[:300], "world_code": None}
-
-    except Exception as e:
-        return {
-            "reply": f"Error generating world: {str(e)}",
-            "world_code": None
-        }
-    
 def format_hardware_context(ctx: dict) -> str:
     """Render the hardware state as a clear text block for the LLM."""
     inputs = ctx.get("configured_inputs", [])
@@ -130,3 +78,76 @@ def format_hardware_context(ctx: dict) -> str:
     )
 
     return "\n".join(lines)
+
+def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
+    """
+    Given a conversation history, generate a 3D world or a chat reply.
+    Uses the chat completions API (not the Assistants API) for simplicity.
+    Returns: { "reply": str, "world_code": str | None }
+    """
+    try:
+        client = get_client()
+
+        # Build messages: system prompt + conversation history
+        system_prompt = load_system_prompt()
+        if hardware_context:
+            system_prompt += "\n\n" + format_hardware_context(hardware_context)
+            if hardware_context.get("chat_history"):
+                system_prompt += f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\nThe user already set up their hardware in the main assistant chat. Here's the conversation history for context:\n{hardware_context['chat_history']}"
+
+        
+        messages = [{"role": "system", "content": system_prompt}] + conversation_history
+
+        # Detect if any message contains image content (vision call)
+        has_vision = any(
+            isinstance(msg.get("content"), list)
+            for msg in conversation_history
+        )
+
+        create_kwargs = {
+            "model": "gpt-4o",
+            "max_tokens": 8000,
+            "messages": messages,
+        }
+        # json_object mode is incompatible with vision messages in some API versions
+        if not has_vision:
+            create_kwargs["response_format"] = {"type": "json_object"}
+        else:
+            last_content = create_kwargs["messages"][-1]["content"]
+            if isinstance(last_content, list):
+                last_content = last_content
+            else:
+                last_content = [{"type": "text", "text": last_content}]
+
+            last_content.append({
+                "type": "text",
+                "text": 'IMPORTANT: Respond ONLY with a valid JSON object {"reply": "...", "world_code": "..."}'
+            })
+            create_kwargs["messages"][-1]["content"] = last_content
+
+        response = client.chat.completions.create(**create_kwargs)
+
+        raw = response.choices[0].message.content.strip()
+
+        try:
+            result = json.loads(raw)
+            return {
+                "reply": result.get("reply", "Here's your world!"),
+                "world_code": result.get("world_code", None)
+            }
+        except json.JSONDecodeError:
+            # Fallback: try to extract JSON block
+            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return {
+                    "reply": result.get("reply", "Here's your world!"),
+                    "world_code": result.get("world_code", None)
+                }
+            return {"reply": raw[:300], "world_code": None}
+
+    except Exception as e:
+        return {
+            "reply": f"Error generating world: {str(e)}",
+            "world_code": None
+        }

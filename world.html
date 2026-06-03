@@ -32,7 +32,12 @@
     </div>
     <div id="chatbox"></div>
     <div class="chat-footer">
+      <div id="attachPreview" class="attach-preview" style="display:none;"></div>
       <div class="input-row">
+        <label class="attach-btn" id="attachLabel" title="Attach image or 3D file">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
+          <input type="file" id="fileInput" accept="image/*,.glb,.gltf,.obj" multiple style="display:none;">
+        </label>
         <input type="text" id="worldInput" placeholder="A dark forest with glowing mushrooms..." autocomplete="off">
         <button class="send-btn" id="sendBtn">
           <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -43,6 +48,8 @@
 
   <div class="world-panel" id="worldPanel">
     <div class="world-toolbar">
+      <button class="tool-btn" id="passthroughBtn">◌ Passthrough</button>
+      <button class="tool-btn" id="downloadBtn">↓ Download</button>
       <button class="tool-btn" id="fullscreenBtn">⛶ Fullscreen</button>
       <button class="tool-btn active" id="liveBtn">⬤ Live sensors</button>
     </div>
@@ -239,34 +246,105 @@ function showWelcome() {
   chatbox.appendChild(msg);
 }
 
+// ── ATTACHED FILES STATE ──
+let pendingFiles = [];
+
+document.getElementById('fileInput').addEventListener('change', function() {
+  const newFiles = Array.from(this.files);
+  pendingFiles = pendingFiles.concat(newFiles).slice(0, 4);
+  renderAttachPreview();
+  this.value = ''; // reset so same file can be re-added
+});
+
+function renderAttachPreview() {
+  const preview = document.getElementById('attachPreview');
+  if (!pendingFiles.length) { preview.style.display = 'none'; return; }
+  preview.style.display = 'flex';
+  preview.innerHTML = '';
+  pendingFiles.forEach((file, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    const isImage = file.type.startsWith('image/');
+    if (isImage) {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.className = 'file-thumb';
+      chip.appendChild(img);
+    } else {
+      const icon = document.createElement('span');
+      icon.className = 'file-icon';
+      icon.textContent = file.name.split('.').pop().toUpperCase();
+      chip.appendChild(icon);
+    }
+    const name = document.createElement('span');
+    name.className = 'file-name';
+    name.textContent = file.name.length > 16 ? file.name.slice(0, 14) + '…' : file.name;
+    chip.appendChild(name);
+    const rm = document.createElement('button');
+    rm.className = 'file-remove';
+    rm.textContent = '×';
+    rm.onclick = () => { pendingFiles.splice(i, 1); renderAttachPreview(); };
+    chip.appendChild(rm);
+    preview.appendChild(chip);
+  });
+}
+
 // ── SEND MESSAGE ──
 async function sendMessage() {
   const input = document.getElementById('worldInput');
   const text = input.value.trim();
-  if (!text) return;
+  if (!text && !pendingFiles.length) return;
 
-  addMsg('user', text);
+  // Show user message with file badges
+  const userBubble = addMsg('user', text || '(files attached)');
+  if (pendingFiles.length) {
+    const badges = document.createElement('div');
+    badges.className = 'file-badges';
+    pendingFiles.forEach(f => {
+      const b = document.createElement('span');
+      b.className = 'file-badge';
+      b.textContent = f.name;
+      badges.appendChild(b);
+    });
+    userBubble.appendChild(badges);
+  }
+
+  const filesToSend = [...pendingFiles];
+  pendingFiles = [];
+  renderAttachPreview();
   input.value = '';
   addLoading();
   document.getElementById('sendBtn').disabled = true;
 
   try {
-    const res = await fetch(`/world-chat?board_id=${boardId || 'none'}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    });
-    const data = await res.json();
+    let data;
+    if (filesToSend.length > 0) {
+      // Use multipart endpoint
+      const form = new FormData();
+      form.append('text', text);
+      filesToSend.forEach(f => form.append('files', f));
+      const res = await fetch(`/world-chat-with-files?board_id=${boardId || 'none'}`, {
+        method: 'POST',
+        body: form
+      });
+      data = await res.json();
+    } else {
+      // Use JSON endpoint (faster, no multipart overhead)
+      const res = await fetch(`/world-chat?board_id=${boardId || 'none'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      data = await res.json();
+    }
+
     removeLoading();
     addMsg('ai', data.reply);
 
     if (data.world_code) {
       injectWorld(data.world_code);
-      // Persist world code
       localStorage.setItem(WORLD_CODE_KEY, data.world_code);
     }
-
-    // Save chat after each exchange
     saveChatHistory();
 
   } catch(e) {
@@ -287,18 +365,56 @@ function injectWorld(html) {
     <script>
     window.sensorData = {};
     window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'sensor') {
+      if (!e.data) return;
+
+      // Sensor bridge
+      if (e.data.type === 'sensor') {
         window.sensorData = e.data.data;
         if (typeof window.onSensorUpdate === 'function') {
           window.onSensorUpdate(e.data.data);
         }
       }
+
+      // Passthrough bridge: make renderer/scene background transparent
+      if (e.data.type === 'passthrough') {
+        const enabled = e.data.enabled;
+        document.body.style.background = enabled ? 'transparent' : '';
+        // Three.js renderer
+        if (window._renderer) {
+          window._renderer.setClearColor(0x000000, enabled ? 0 : 1);
+          window._renderer.domElement.style.background = 'transparent';
+        }
+        // scene background
+        if (window._scene) {
+          window._scene.background = enabled ? null : window._sceneBg;
+        }
+      }
     });
     <\/script>
   `;
+
+  // Patch Three.js scene/renderer references for passthrough
+  const passthroughPatch = `
+    <script>
+    // Expose renderer and scene globals for passthrough control
+    const _origAppend = document.body.appendChild.bind(document.body);
+    document.body.appendChild = function(el) {
+      const result = _origAppend(el);
+      if (el && el.tagName === 'CANVAS') {
+        // Find renderer — poll until available
+        const check = setInterval(() => {
+          if (window.renderer) { window._renderer = window.renderer; clearInterval(check); }
+        }, 100);
+        setTimeout(() => clearInterval(check), 5000);
+      }
+      return result;
+    };
+    <\/script>
+  `;
+
   const injected = html.includes('</head>')
-    ? html.replace('</head>', bridgeScript + '</head>')
-    : bridgeScript + html;
+    ? html.replace('</head>', bridgeScript + passthroughPatch + '</head>')
+    : bridgeScript + passthroughPatch + html;
 
   const blob = new Blob([injected], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
@@ -306,7 +422,19 @@ function injectWorld(html) {
   frame.src = url;
   frame.style.display = 'block';
   emptyState.style.display = 'none';
+
+  // Re-apply passthrough if it was enabled before reload
+  frame.addEventListener('load', () => {
+    if (passthroughEnabled && frame.contentWindow) {
+      setTimeout(() => {
+        frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
+      }, 300);
+    }
+  }, { once: true });
 }
+
+// ── PASSTHROUGH STATE ──
+let passthroughEnabled = false;
 
 // ── TOOLBAR ──
 document.getElementById('fullscreenBtn').addEventListener('click', () => {
@@ -322,6 +450,33 @@ document.getElementById('liveBtn').addEventListener('click', () => {
   btn.textContent = liveEnabled ? '⬤ Live sensors' : '◯ Live sensors';
 });
 
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  if (!worldCode) { alert('No world to download yet. Generate one first!'); return; }
+  const blob = new Blob([worldCode], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `world_${boardId || 'scene'}_${Date.now()}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.getElementById('passthroughBtn').addEventListener('click', () => {
+  passthroughEnabled = !passthroughEnabled;
+  const btn = document.getElementById('passthroughBtn');
+  btn.classList.toggle('active', passthroughEnabled);
+  btn.textContent = passthroughEnabled ? '● Passthrough ON' : '◌ Passthrough';
+  const panel = document.getElementById('worldPanel');
+  const frame = document.getElementById('world-frame');
+  if (passthroughEnabled) {
+    panel.style.background = 'transparent';
+    frame.style.background = 'transparent';
+    if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
+  } else {
+    panel.style.background = '#080808';
+    frame.style.background = '#050505';
+    if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: false }, '*');
+  }
+});
 document.getElementById('clearBtn').addEventListener('click', clearHistory);
 
 // ── INPUT EVENTS ──
