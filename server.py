@@ -769,7 +769,16 @@ async def get_world_state(board_id: str = Query(...)):
     
     for msg in history:
         if msg["role"] == "user":
-            chat_messages.append({"side": "user", "text": msg["content"]})
+            content = msg["content"]
+            # content peut être string ou list de content blocks
+            if isinstance(content, list):
+                text = " ".join(
+                    block["text"] for block in content 
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+            else:
+                text = content or ""
+            chat_messages.append({"side": "user", "text": text})
         elif msg["role"] == "assistant":
             try:
                 data = json.loads(msg["content"])
