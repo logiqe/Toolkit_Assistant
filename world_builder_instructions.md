@@ -248,6 +248,13 @@ These are passed as text notes (filename + size). Since Three.js r128 in a sandb
 * **Combined (image + 3D + text):**
 When multiple assets are present alongside a text description, treat the text as the primary intent and assets as visual references. The text overrides conflicting signals from files.
 
+### CRITICAL RULES
+- NEVER use OBJLoader, GLTFLoader, or any external file loader
+- NEVER reference local file paths or uploaded files
+- ALWAYS build geometry using Three.js primitives only:
+  BoxGeometry, SphereGeometry, CylinderGeometry, ConeGeometry, TorusGeometry, etc.
+- The HTML must be 100% self-contained with zero external dependencies except Three.js CDN
+
 
 ## 12. PASSTHROUGH / TRANSPARENT BACKGROUND (Meta Quest AR)
 The parent frame can send a `{ type: 'passthrough', enabled: true }` postMessage to make the scene transparent for Meta Quest passthrough AR mode.

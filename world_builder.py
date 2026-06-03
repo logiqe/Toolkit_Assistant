@@ -26,7 +26,6 @@ def load_system_prompt() -> str:
         _system_prompt_cache = WORLD_PROMPT_FILE.read_text(encoding="utf-8")
     return _system_prompt_cache
 
-
 def reload_system_prompt() -> str:
     """Force reload from disk (useful for admin hot-reload)."""
     global _system_prompt_cache
@@ -41,6 +40,13 @@ def get_client():
             raise RuntimeError("OPENAI_API_KEY not set.")
         _client = OpenAI(api_key=key)
     return _client
+
+def sanitize_world_code(html: str) -> str:
+    """Fix common LLM-generated JS escape issues."""
+    # Seulement dans les chemins de fichiers (loader.load('...')), pas partout
+    html = re.sub(r"load\('([^']*)'\)", lambda m: "load('" + m.group(1).replace("\\", "/") + "')", html)
+    html = re.sub(r'load\("([^"]*)"\)', lambda m: 'load("' + m.group(1).replace("\\", "/") + '")', html)
+    return html
 
 def format_hardware_context(ctx: dict) -> str:
     """Render the hardware state as a clear text block for the LLM."""
@@ -133,7 +139,8 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
             result = json.loads(raw)
             return {
                 "reply": result.get("reply", "Here's your world!"),
-                "world_code": result.get("world_code", None)
+                "world_code": sanitize_world_code(result.get("world_code", None) or "")
+                        or None
             }
         except json.JSONDecodeError:
             # Fallback: try to extract JSON block
@@ -142,7 +149,8 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
                 result = json.loads(json_match.group())
                 return {
                     "reply": result.get("reply", "Here's your world!"),
-                    "world_code": result.get("world_code", None)
+                    "world_code": sanitize_world_code(result.get("world_code", None) or "")
+                            or None
                 }
             return {"reply": raw[:300], "world_code": None}
 
