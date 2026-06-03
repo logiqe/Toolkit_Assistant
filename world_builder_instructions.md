@@ -313,21 +313,23 @@ window._sceneBg = scene.background; // save original background
 - Particle systems and meshes with additive blending look excellent in passthrough mode
 
 
-## 13. WEBXR / META QUEST VR MODE
+## 13. WEBXR / META QUEST AR MODE
 
 Always include in every generated scene:
 
-1. Script tag in <head>:
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
+1. Script tags in <head>:
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
 
 2. After renderer creation:
 renderer.xr.enabled = true;
-document.body.appendChild(THREE.VRButton.createButton(renderer));
+document.body.appendChild(THREE.ARButton.createButton(renderer, {
+  optionalFeatures: ['local-floor', 'bounded-floor']
+}));
 
 3. Replace requestAnimationFrame loop with:
 renderer.setAnimationLoop(function() {
   renderer.render(scene, camera);
 });
 
-This allows immersive VR on Meta Quest Browser.
-VRButton appears only when WebXR is supported.
+ARButton opens an immersive-ar session on Meta Quest — this enables real passthrough.
+scene.background must be set to null and renderer.setClearColor(0,0,0,0) for transparency to work in AR mode.
