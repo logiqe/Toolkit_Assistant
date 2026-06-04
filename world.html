@@ -61,7 +61,12 @@
     </div>
 
     <div id="flash-overlay"></div>
-    <iframe id="world-frame" style="display:none;" sandbox="allow-scripts allow-same-origin"></iframe>
+    <iframe 
+      id="world-frame" 
+      style="display:none;" 
+      sandbox="allow-scripts allow-same-origin"
+      allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera"
+      allowfullscreen></iframe>
     <div class="sensor-overlay" id="sensorOverlay"></div>
   </div>
 </div>
@@ -388,17 +393,11 @@ function injectWorld(html) {
       }
 
       if (e.data.type === 'enter-vr') {
-        // Trouver et cliquer le bouton VR généré par Three.js
-        const vrBtn = document.querySelector('button[id*="VRButton"], .VRButton, button');
-        if (vrBtn) vrBtn.click();
-        
-        // Ou déclencher directement si le renderer est exposé
-        if (window._xrSession === undefined && navigator.xr) {
-          navigator.xr.requestSession('immersive-vr', {
-            optionalFeatures: ['local-floor', 'bounded-floor']
-          }).then(session => {
-            if (window._renderer) window._renderer.xr.setSession(session);
-          });
+        const vrBtn = document.getElementById('VRButton');
+        if (vrBtn) {
+          vrBtn.click();
+        } else {
+          console.warn('VRButton not found in scene');
         }
       }
 
