@@ -329,14 +329,85 @@ When hardware context is absent or empty:
 - Still include the `window.onSensorUpdate` stub so the bridge stays functional if sensors are added later.
 
 
-## 8. AESTHETIC GUIDELINES
+## 8. AESTHETIC GUIDELINES — AIM FOR CINEMATIC, NOT TUTORIAL
 
-- Color: prefer cohesive palettes (analogous or complementary). Avoid pure primaries unless intentional.
-- Geometry: combine 2–4 distinct mesh types (ground / sky / objects / particles) for visual richness.
-- Materials: prefer `MeshStandardMaterial` or `MeshPhongMaterial` over `MeshBasicMaterial` so lights have impact.
-- Particles: use `Points` with small additive-blended sprites for ambient life (stars, dust, bubbles, fireflies).
-- Camera: position to reveal depth — never a flat front-on view.
-- Motion: subtle is better than frenetic. Slow rotations, gentle bobs, breathing fog.
+The default Three.js look (saturated rainbow, flat planes, cone-trees) 
+is FORBIDDEN. Every scene must feel like a mood piece, not a demo.
+
+### 8.1 — Color discipline
+- **One palette per scene.** Pick 3–5 colors max, all within 60° of hue 
+  of each other, OR a single dominant + one accent.
+- **Desaturate.** HSL saturation rarely above 0.5 for environment 
+  (ground, sky, fog). Save high saturation for tiny accents (a glowing 
+  mushroom cap, a firefly) — never for tree trunks or sky.
+- **Match the mood word** in the user's prompt:
+  - "dawn" → warm pinks/oranges in fog, cool deep blue ground
+  - "misty" → low contrast, raised fog density, washed-out distance
+  - "dark" → deep navy/violet, never pure black, single accent light
+  - "underwater" → cyan-teal, volumetric blue fog, no warm tones
+  - "alien" → magenta/cyan complementary, sickly green accents
+- **NEVER use `Math.random()` on hue.** If varying colors, vary 
+  lightness or saturation within the palette only.
+
+### 8.2 — Geometry: avoid the "primitives stack" look
+- **Trees are NOT stacked cones.** A believable tree:
+  - Trunk: `CylinderGeometry` with `radialSegments: 8`, slightly tapered, 
+    irregular rotation
+  - Foliage: 3–6 overlapping `IcosahedronGeometry` or `SphereGeometry` 
+    blobs at varying scales, positioned organically (not centered)
+  - Use `MeshStandardMaterial` with `flatShading: false` and `roughness: 0.9`
+- **Ground is NEVER a flat plane.** Always displace vertices:
+  ```javascript
+  const geo = new THREE.PlaneGeometry(100, 100, 64, 64);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setZ(i, (Math.sin(pos.getX(i)*0.3) + Math.cos(pos.getY(i)*0.3)) * 0.5 
+                 + (Math.random() - 0.5) * 0.3);
+  }
+  geo.computeVertexNormals();
+  ```
+- **Vary scale aggressively.** When placing N objects, use `scale = 0.6 + Math.random() * 1.4` minimum. Identical scales = toy look.
+- **Rotate randomly on Y.** `obj.rotation.y = Math.random() * Math.PI * 2`
+
+### 8.3 — Density & composition
+- **Foreground / midground / background** — always three planes of depth. Place 2–3 hero objects close (z: 2–8), 10–20 midground (z: 10–25), 30+ tiny background (z: 30–60).
+- **Hide the horizon with fog.** `scene.fog = new THREE.FogExp2(color, 0.04)` where color matches the sky. Distance fades into mist.
+- **Negative space matters.** Don't pack the scene uniformly. Leave 
+clearings, sight-lines, focal points.
+
+## 8.4 — Lighting: kill the "noon sun" look
+- **NEVER** a single white DirectionalLight from above. That's the Three.js-demo signature.
+- **Three-layer lighting:**
+  1. AmbientLight: 0.3–0.5 intensity, tinted toward sky color
+  2. HemisphereLight: sky-color top, ground-color bottom, 0.4–0.6
+  3. DirectionalLight: warm or cool tinted (NEVER 0xffffff), low angle (sun.position.set(5, 3, 5) not (5, 10, 5)) for long dramatic shadows
+- **Add 1–2 PointLights** as accents matching the mood (warm campfire, 
+cold moonlight, glowing mushroom). These sell the atmosphere.
+- **Enable soft shadows:**
+```javascript
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.radius = 4;
+```
+
+### 8.5 — Atmosphere (the secret ingredient)
+
+- **Particles are mandatory** for any outdoor/atmospheric scene:
+  - Dust motes drifting in sun beams (small white Points, additive blend)
+  - Fireflies (PointLight + glowing sphere, slow lerp motion)
+  - Falling leaves / snow / embers depending on mood
+- **Camera should not be static.** Add a slow drift:
+```javascript
+camera.position.x = Math.sin(t * 0.1) * 0.3;
+camera.position.y = 1.6 + Math.sin(t * 0.15) * 0.05;
+```
+
+### 8.6 — Materials checklist per scene
+- Used `MeshStandardMaterial` with proper `roughness` (0.7–1.0 for 
+natural surfaces, 0.1–0.4 for water/metal)? ✓
+- No `MeshBasicMaterial` except for sky-spheres or particle sprites? ✓
+- At least one emissive material (glow source)? ✓
+- Variation: 3+ distinct materials in the scene, not 1 applied to all? ✓
 
 
 ## 9. ANTI-PATTERNS (NEVER DO)
