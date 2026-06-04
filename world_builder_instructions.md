@@ -393,3 +393,11 @@ camera.position.set(0, 1.6, 5); // 1.6m eye height — standard for standing VR
 - `VRButton` shows "Enter VR" only on XR-capable devices (Quest, etc.), hidden on desktop
 - `setAnimationLoop` is the XR-compatible render loop — `requestAnimationFrame` does not work in immersive mode
 - Without these, the Quest browser renders a flat mono view with no 6DOF tracking
+
+## ALWAYS expose renderer globally for XR bridge
+After creating the renderer, always add:
+```javascript
+window._renderer = renderer;
+renderer.xr.enabled = true;
+```
+This allows the parent frame to trigger VR mode programmatically.

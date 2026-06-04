@@ -48,6 +48,7 @@
 
   <div class="world-panel" id="worldPanel">
     <div class="world-toolbar">
+      <button id="vrBtn" class="toolbar-btn" title="Enter VR">Enter VR</button>
       <button class="tool-btn" id="passthroughBtn">◌ Passthrough</button>
       <button class="tool-btn" id="downloadBtn">↓ Download</button>
       <button class="tool-btn" id="fullscreenBtn">⛶ Fullscreen</button>
@@ -60,7 +61,7 @@
     </div>
 
     <div id="flash-overlay"></div>
-    <iframe id="world-frame" style="display:none;" allow="xr-spatial-tracking; microphone; camera" sandbox="allow-scripts allow-same-origin allow-pointer-lock"></iframe>
+    <iframe id="world-frame" style="display:none;" sandbox="allow-scripts allow-same-origin"></iframe>
     <div class="sensor-overlay" id="sensorOverlay"></div>
   </div>
 </div>
@@ -371,18 +372,14 @@ function injectWorld(html) {
   const frame = document.getElementById('world-frame');
   const emptyState = document.getElementById('emptyState');
 
-  // Bridge injecté juste avant </body> — Three.js est déjà chargé à ce moment
-  // Le pont expose une variable globale _passthroughActive que la boucle animate() lit chaque frame
+  // Bridge injected BEFORE </body> so Three.js is already loaded when it runs
   const bridgeScript = `
     <script>
-    // ── Passthrough state (lue par animate() chaque frame) ──
-    window._passthroughActive = false;
-
     window.sensorData = {};
     window.addEventListener('message', function(e) {
       if (!e.data) return;
 
-      // Sensor bridge
+      // ── Sensor bridge ──
       if (e.data.type === 'sensor') {
         window.sensorData = e.data.data;
         if (typeof window.onSensorUpdate === 'function') {
@@ -390,56 +387,59 @@ function injectWorld(html) {
         }
       }
 
-      // Passthrough bridge
+      if (e.data.type === 'enter-vr') {
+        // Trouver et cliquer le bouton VR généré par Three.js
+        const vrBtn = document.querySelector('button[id*="VRButton"], .VRButton, button');
+        if (vrBtn) vrBtn.click();
+        
+        // Ou déclencher directement si le renderer est exposé
+        if (window._xrSession === undefined && navigator.xr) {
+          navigator.xr.requestSession('immersive-vr', {
+            optionalFeatures: ['local-floor', 'bounded-floor']
+          }).then(session => {
+            if (window._renderer) window._renderer.xr.setSession(session);
+          });
+        }
+      }
+
+      // ── Passthrough bridge ──
+      // Relies on window._renderer and window._scene exposed by the generated scene
       if (e.data.type === 'passthrough') {
-        window._passthroughActive = e.data.enabled;
-        document.documentElement.style.background = e.data.enabled ? 'transparent' : '';
-        document.body.style.background = e.data.enabled ? 'transparent' : '';
+        const enabled = e.data.enabled;
+        document.documentElement.style.background = enabled ? 'transparent' : '';
+        document.body.style.background = enabled ? 'transparent' : '';
 
         if (window._renderer) {
-          // Appliquer immédiatement
-          if (e.data.enabled) {
-            window._renderer.setClearColor(0x000000, 0);
-          } else {
-            window._renderer.setClearColor(
-              window._sceneBg ? window._sceneBg.getHex() : 0x0a0a1a, 1
-            );
+          window._renderer.setClearColor(0x000000, enabled ? 0 : 1);
+          if (window._renderer.domElement) {
+            window._renderer.domElement.style.background = 'transparent';
           }
-          if (window._scene) {
-            window._scene.background = e.data.enabled ? null : (window._sceneBg || null);
-          }
+        }
+        if (window._scene) {
+          window._scene.background = enabled ? null : (window._sceneBg || null);
         }
       }
     });
-
-    // Patch animate() pour maintenir le passthrough chaque frame
-    // (évite que le renderer redessine sa couleur de fond par-dessus)
-    const _raf = window.requestAnimationFrame.bind(window);
-    window.requestAnimationFrame = function(cb) {
-      return _raf(function(t) {
-        if (window._passthroughActive && window._renderer) {
-          window._renderer.setClearColor(0x000000, 0);
-          if (window._scene) window._scene.background = null;
-        }
-        cb(t);
-      });
-    };
     <\/script>
   `;
 
+  // Insert bridge just before </body> so Three.js CDN script is already executed
   const injected = html.includes('</body>')
     ? html.replace('</body>', bridgeScript + '</body>')
     : html + bridgeScript;
 
+  // Use srcdoc for sandboxed rendering
   frame.srcdoc = injected;
   frame.style.display = 'block';
   emptyState.style.display = 'none';
 
+  // Re-apply passthrough after iframe reloads
   frame.addEventListener('load', () => {
     if (passthroughEnabled && frame.contentWindow) {
+      // Small delay to let Three.js finish init and expose window._renderer
       setTimeout(() => {
         frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
-      }, 600);
+      }, 500);
     }
   }, { once: true });
 }
@@ -448,6 +448,13 @@ function injectWorld(html) {
 let passthroughEnabled = false;
 
 // ── TOOLBAR ──
+document.getElementById('vrBtn').addEventListener('click', () => {
+  const frame = document.getElementById('world-frame');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'enter-vr' }, '*');
+  }
+});
+
 document.getElementById('fullscreenBtn').addEventListener('click', () => {
   const panel = document.getElementById('worldPanel');
   if (document.fullscreenElement) document.exitFullscreen();
@@ -481,10 +488,12 @@ document.getElementById('passthroughBtn').addEventListener('click', () => {
   if (passthroughEnabled) {
     panel.style.background = 'transparent';
     frame.style.background = 'transparent';
+    frame.style.cssText += '; background: transparent !important;';
     if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
   } else {
     panel.style.background = '#080808';
-    frame.style.background = '#050505';
+    frame.style.background = '';
+    frame.style.removeProperty('background');
     if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: false }, '*');
   }
 });
