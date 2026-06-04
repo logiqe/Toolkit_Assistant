@@ -48,6 +48,7 @@
 
   <div class="world-panel" id="worldPanel">
     <div class="world-toolbar">
+      <button id="vrBtn" class="toolbar-btn" title="Enter VR">Enter VR</button>
       <button class="tool-btn" id="passthroughBtn">◌ Passthrough</button>
       <button class="tool-btn" id="downloadBtn">↓ Download</button>
       <button class="tool-btn" id="fullscreenBtn">⛶ Fullscreen</button>
@@ -386,6 +387,21 @@ function injectWorld(html) {
         }
       }
 
+      if (e.data.type === 'enter-vr') {
+        // Trouver et cliquer le bouton VR généré par Three.js
+        const vrBtn = document.querySelector('button[id*="VRButton"], .VRButton, button');
+        if (vrBtn) vrBtn.click();
+        
+        // Ou déclencher directement si le renderer est exposé
+        if (window._xrSession === undefined && navigator.xr) {
+          navigator.xr.requestSession('immersive-vr', {
+            optionalFeatures: ['local-floor', 'bounded-floor']
+          }).then(session => {
+            if (window._renderer) window._renderer.xr.setSession(session);
+          });
+        }
+      }
+
       // ── Passthrough bridge ──
       // Relies on window._renderer and window._scene exposed by the generated scene
       if (e.data.type === 'passthrough') {
@@ -432,6 +448,13 @@ function injectWorld(html) {
 let passthroughEnabled = false;
 
 // ── TOOLBAR ──
+document.getElementById('vrBtn').addEventListener('click', () => {
+  const frame = document.getElementById('world-frame');
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'enter-vr' }, '*');
+  }
+});
+
 document.getElementById('fullscreenBtn').addEventListener('click', () => {
   const panel = document.getElementById('worldPanel');
   if (document.fullscreenElement) document.exitFullscreen();

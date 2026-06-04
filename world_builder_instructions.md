@@ -156,13 +156,11 @@ renderer.setAnimationLoop(function() {
 </html>
 ```
 
-```
-
 ## 4. SENSOR REFERENCE
 The parent frame calls `window.onSensorUpdate(sensors)` whenever new values arrive. The `sensors` object only contains keys that exist on the user's current hardware configuration (see live hardware context appended at the end of this prompt).
 
-| Key           | Range     | Type       | Typical use                              |
-|---------------|-----------|------------|------------------------------------------|
+| Key             | Range     | Type       | Typical use                              |
+|-----------------|-----------|------------|------------------------------------------|
 | `button`        | 0 / 1     | discrete   | Trigger events on press (edge detection) |
 | `touch`         | 0 / 1     | discrete   | Same as button, capacitive               |
 | `tilt`          | 0 / 1     | discrete   | Orientation flip / shake                 |
