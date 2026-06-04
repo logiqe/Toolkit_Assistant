@@ -111,6 +111,12 @@ sun.position.set(5, 10, 5);
 sun.castShadow = true;
 scene.add(sun);
 
+// === PASSTHROUGH GLOBALS (required — do not remove) ===
+// Expose renderer and scene so the passthrough bridge can control them
+window._renderer = renderer;
+window._scene = scene;
+window._sceneBg = scene.background; // save original background (update if you change it later)
+
 // === YOUR SCENE OBJECTS HERE ===
 
 
@@ -351,3 +357,36 @@ renderer.setAnimationLoop(function() {
 
 ARButton opens an immersive-ar session on Meta Quest — this enables real passthrough.
 scene.background must be set to null and renderer.setClearColor(0,0,0,0) for transparency to work in AR mode.
+
+---
+
+## 12. PASSTHROUGH / TRANSPARENT BACKGROUND (Meta Quest AR)
+
+The parent frame sends `{ type: 'passthrough', enabled: true/false }` via postMessage.
+The bridge script (injected automatically) handles this — but it relies on `window._renderer` and `window._scene` being exposed.
+
+**You MUST always include these three lines immediately after creating the renderer and scene:**
+
+```javascript
+window._renderer = renderer;
+window._scene = scene;
+window._sceneBg = scene.background; // save AFTER setting scene.background
+```
+
+**You MUST use `alpha: true` in the WebGLRenderer constructor:**
+```javascript
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x000000, 1); // starts opaque; bridge sets to 0 for passthrough
+```
+
+**If you set `scene.background` at any point, immediately update `window._sceneBg`:**
+```javascript
+scene.background = new THREE.Color(0x001133);
+window._sceneBg = scene.background; // keep in sync
+```
+
+**Rules:**
+- Never call `renderer.setClearAlpha(1)` — the bridge controls this
+- Objects with additive blending (`THREE.AdditiveBlending`) look great in passthrough
+- In passthrough mode the bridge sets `scene.background = null` and `renderer.setClearColor(0,0,0,0)`
+- The base template already includes these globals — do not remove them

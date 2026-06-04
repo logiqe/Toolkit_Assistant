@@ -371,13 +371,14 @@ function injectWorld(html) {
   const frame = document.getElementById('world-frame');
   const emptyState = document.getElementById('emptyState');
 
+  // Bridge injected BEFORE </body> so Three.js is already loaded when it runs
   const bridgeScript = `
     <script>
     window.sensorData = {};
     window.addEventListener('message', function(e) {
       if (!e.data) return;
 
-      // Sensor bridge
+      // ── Sensor bridge ──
       if (e.data.type === 'sensor') {
         window.sensorData = e.data.data;
         if (typeof window.onSensorUpdate === 'function') {
@@ -385,60 +386,44 @@ function injectWorld(html) {
         }
       }
 
-      // Passthrough bridge: make renderer/scene background transparent
+      // ── Passthrough bridge ──
+      // Relies on window._renderer and window._scene exposed by the generated scene
       if (e.data.type === 'passthrough') {
         const enabled = e.data.enabled;
+        document.documentElement.style.background = enabled ? 'transparent' : '';
         document.body.style.background = enabled ? 'transparent' : '';
-        // Three.js renderer
+
         if (window._renderer) {
           window._renderer.setClearColor(0x000000, enabled ? 0 : 1);
-          window._renderer.domElement.style.background = 'transparent';
+          if (window._renderer.domElement) {
+            window._renderer.domElement.style.background = 'transparent';
+          }
         }
-        // scene background
         if (window._scene) {
-          window._scene.background = enabled ? null : window._sceneBg;
+          window._scene.background = enabled ? null : (window._sceneBg || null);
         }
       }
     });
     <\/script>
   `;
 
-  // Patch Three.js scene/renderer references for passthrough
-  const passthroughPatch = `
-    <script>
-    // Expose renderer and scene globals for passthrough control
-    const _origAppend = document.body.appendChild.bind(document.body);
-    document.body.appendChild = function(el) {
-      const result = _origAppend(el);
-      if (el && el.tagName === 'CANVAS') {
-        // Find renderer — poll until available
-        const check = setInterval(() => {
-          if (window.renderer) { window._renderer = window.renderer; clearInterval(check); }
-        }, 100);
-        setTimeout(() => clearInterval(check), 5000);
-      }
-      return result;
-    };
-    <\/script>
-  `;
+  // Insert bridge just before </body> so Three.js CDN script is already executed
+  const injected = html.includes('</body>')
+    ? html.replace('</body>', bridgeScript + '</body>')
+    : html + bridgeScript;
 
-  const injected = html.includes('</head>')
-    ? html.replace('</head>', bridgeScript + passthroughPatch + '</head>')
-    : bridgeScript + passthroughPatch + html;
-
-  const blob = new Blob([injected], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-
+  // Use srcdoc for sandboxed rendering
   frame.srcdoc = injected;
   frame.style.display = 'block';
   emptyState.style.display = 'none';
 
-  // Re-apply passthrough if it was enabled before reload
+  // Re-apply passthrough after iframe reloads
   frame.addEventListener('load', () => {
     if (passthroughEnabled && frame.contentWindow) {
+      // Small delay to let Three.js finish init and expose window._renderer
       setTimeout(() => {
         frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
-      }, 300);
+      }, 500);
     }
   }, { once: true });
 }
@@ -480,10 +465,12 @@ document.getElementById('passthroughBtn').addEventListener('click', () => {
   if (passthroughEnabled) {
     panel.style.background = 'transparent';
     frame.style.background = 'transparent';
+    frame.style.cssText += '; background: transparent !important;';
     if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
   } else {
     panel.style.background = '#080808';
-    frame.style.background = '#050505';
+    frame.style.background = '';
+    frame.style.removeProperty('background');
     if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: false }, '*');
   }
 });
