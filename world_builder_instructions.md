@@ -77,52 +77,60 @@ Never access document.body or any DOM element outside this wrapper.
 <meta charset="UTF-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: #000; overflow: hidden; }
+  body { background: #0a0a14; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; }
+  /* VR button styling */
+  #VRButton, #ARButton {
+    position: fixed !important;
+    bottom: 24px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    z-index: 999 !important;
+  }
 </style>
 </head>
 <body>
+<!-- Three.js core — MUST be first, no defer -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- WebXR VR/AR buttons — required for Meta Quest -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
 <script>
 
 // === SCENE SETUP ===
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 2, 8);
-
-scene.background = new THREE.Color(0x0a0a1a); // ← jamais 0x000000
+scene.background = new THREE.Color(0x0a0a1a);
 window._scene = scene;
-window._sceneBg = scene.background;
+window._sceneBg = scene.background.clone();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // ← alpha: true
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 5); // eye height for VR
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x0a0a1a, 1);
 renderer.shadowMap.enabled = true;
+renderer.xr.enabled = true;  // ← REQUIRED for Meta Quest VR/AR
 document.body.appendChild(renderer.domElement);
 window._renderer = renderer;
 
+// === VR BUTTON (shows "Enter VR" on Meta Quest, hidden on desktop) ===
+document.body.appendChild(THREE.VRButton.createButton(renderer));
+
 // === LIGHTS ===
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);      // ← 0.6 min
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambient);
-const hemi = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5); // ← fill light
+const hemi = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xffffff, 1.0);       // ← 1.0 min
+const sun = new THREE.DirectionalLight(0xffffff, 1.0);
 sun.position.set(5, 10, 5);
 sun.castShadow = true;
 scene.add(sun);
 
-// === PASSTHROUGH GLOBALS (required — do not remove) ===
-// Expose renderer and scene so the passthrough bridge can control them
-window._renderer = renderer;
-window._scene = scene;
-window._sceneBg = scene.background; // save original background (update if you change it later)
-
 // === YOUR SCENE OBJECTS HERE ===
 
 
-// === SENSOR BRIDGE (always include) ===
-// window.sensorData is injected by the parent frame.
-// Define onSensorUpdate to react to incoming values.
+// === SENSOR BRIDGE (always include — populated by parent frame) ===
 window.onSensorUpdate = function(sensors) {
   // sensors may contain: button, touch, light, temperature, distance, potentiometer, tilt
   // Only keys configured on the user's board will be present.
@@ -135,18 +143,19 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// === ANIMATION LOOP ===
+// === ANIMATION LOOP — use setAnimationLoop for WebXR compatibility ===
 const clock = new THREE.Clock();
-function animate() {
-  requestAnimationFrame(animate);
+renderer.setAnimationLoop(function() {
   const dt = clock.getDelta();
-  // Per-frame animations and smooth lerps here
+  // Per-frame animations here
   renderer.render(scene, camera);
-}
-animate();
+});
+
 </script>
 </body>
 </html>
+```
+
 ```
 
 ## 4. SENSOR REFERENCE
@@ -213,16 +222,19 @@ window.onSensorUpdate = function(sensors) {
 ## 6. QUALITY CHECKLIST
 Apply every single rule to every generated scene:
 
-1. Use `r128` from `cdnjs.cloudflare.com` only (CSP compliant)
-2. Include ambient + directional lights
-3. Add `scene.fog` for atmospheric depth
-4. Use a continuous animation in `animate()` — the scene must never look static
-5. React to EVERY sensor available in the hardware context, when contextually meaningful
-6. Use `THREE.MathUtils.lerp` for all continuous sensor reactions — never instant jumps
-7. Include at least one autonomous camera movement (orbit, sway, bob) so the scene feels alive even without sensor input
-8. Aim for atmosphere and beauty: layered geometry, considered colors, subtle motion
-9. Wrap heavy procedural meshes in `try/catch` to avoid blocking the render loop on failure
-10. Always set `scene.background` — never leave it as the default black void
+1. Use `r128` from `cdnjs.cloudflare.com` for Three.js core — no `defer` attribute
+2. Include VRButton and ARButton scripts from jsdelivr CDN (see §13)
+3. Set `renderer.xr.enabled = true` and append VRButton — required for Meta Quest
+4. Use `renderer.setAnimationLoop()` — never `requestAnimationFrame` (breaks in XR)
+5. Expose `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough
+6. Use `alpha: true` in WebGLRenderer constructor
+7. Camera at `position.set(0, 1.6, 5)` — standing eye height for VR comfort
+8. Include ambient (≥0.6) + HemisphereLight + DirectionalLight (≥1.0)
+9. Add `scene.fog` for atmospheric depth
+10. React to EVERY sensor in the hardware context, when contextually meaningful
+11. Use `THREE.MathUtils.lerp` for all continuous sensor reactions — never instant jumps
+12. Include at least one autonomous camera movement so the scene feels alive
+13. Always set `scene.background` to a non-black color — never `0x000000`
 
 
 ## 7. HARDWARE CONTEXT AWARENESS
@@ -252,12 +264,16 @@ When hardware context is absent or empty:
 ## 9. ANTI-PATTERNS (NEVER DO)
 
 - Loading external assets (textures, models, fonts) from URLs — keep everything procedural
-- Using `THREE.OrbitControls` or other add-ons not included in the r128 core build
-- Placing sensor reactions inside the `animate()` loop — use `onSensorUpdate` to set targets, read targets in `animate`
+- Using `THREE.OrbitControls` or other add-ons not in r128 core (VRButton/ARButton are OK via CDN)
+- Using `requestAnimationFrame` loop — **always use `renderer.setAnimationLoop()`** for WebXR compatibility
+- Omitting `renderer.xr.enabled = true` and VRButton — every scene needs it for Meta Quest
+- Omitting `window._renderer`, `window._scene`, `window._sceneBg` globals — passthrough breaks without them
+- Placing sensor reactions inside the render loop — use `onSensorUpdate` to set targets, read targets in loop
 - Returning markdown, prose, or commentary outside the JSON object
-- Hardcoding sensor keys that are not present in the hardware context
+- Hardcoding sensor keys not in the hardware context
 - Instant value snaps on continuous sensors — always lerp
 - Setting `world_code` to an empty string — use `null` when no scene is needed
+- Adding `defer` attribute to the Three.js CDN script tag — it must load synchronously
 
 
 ## 10. JSON OUTPUT REMINDER
@@ -308,85 +324,72 @@ The URL is publicly accessible — always use it directly, never skip it.
 L'iframe a `sandbox="allow-scripts allow-same-origin"` — c'est bon, `allow-same-origin` permet les fetch vers ton serveur.
 
 
-## 12. PASSTHROUGH / TRANSPARENT BACKGROUND (Meta Quest AR)
-The parent frame can send a `{ type: 'passthrough', enabled: true }` postMessage to make the scene transparent for Meta Quest passthrough AR mode.
 
-**When generating a scene, always expose these globals so the passthrough bridge can work:**
-javascript:
-// After creating the renderer:
+---
+
+## 12. PASSTHROUGH & TRANSPARENT BACKGROUND
+
+The parent frame controls passthrough via `window._passthroughActive` (a boolean set each frame by the bridge).  
+**You do not need to handle postMessage yourself** — the bridge patches `requestAnimationFrame` automatically.
+
+**Required globals — include after renderer and scene creation:**
+```javascript
 window._renderer = renderer;
-renderer.setClearColor(0x0a0a1a, 1); // default: dark (never pure black)
-
-// After creating the scene:
 window._scene = scene;
-window._sceneBg = scene.background; // save original background
+window._sceneBg = scene.background.clone(); // .clone() if it's a Color object
+```
 
-// The bridge will call:
-//   renderer.setClearColor(0x000000, 0)  → transparent
-//   scene.background = null              → no skybox
-// when passthrough is activated.
+**Required renderer options:**
+```javascript
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setClearColor(0x0a0a1a, 1); // opaque default
+```
 
+**If you update `scene.background` at any point, sync `window._sceneBg` too:**
+```javascript
+scene.background = new THREE.Color(0x001133);
+window._sceneBg = scene.background.clone();
+```
 
-**Rules:**
-- Always assign `window._renderer = renderer` and `window._scene = scene` after creation
-- Always save `window._sceneBg = scene.background` after setting a background color or texture
-- Use `renderer.alpha = true` in the WebGLRenderer constructor: `new THREE.WebGLRenderer({ antialias: true, alpha: true })`
-- Do NOT hardcode `renderer.setClearAlpha(1)` — leave transparency control to the bridge
-- Particle systems and meshes with additive blending look excellent in passthrough mode
+**Never call `renderer.setClearAlpha(1)` directly** — the bridge controls this per-frame.
 
+---
 
-## 13. WEBXR / META QUEST AR MODE
+## 13. WEBXR / META QUEST VR MODE
 
-Always include in every generated scene:
+**Every scene MUST include these for Meta Quest compatibility:**
 
-1. Script tags in <head>:
+### Required script tags (in `<head>`, after Three.js):
 ```html
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
 ```
 
-2. After renderer creation:
+### Required renderer settings:
+```javascript
 renderer.xr.enabled = true;
-document.body.appendChild(THREE.ARButton.createButton(renderer, {
-  optionalFeatures: ['local-floor', 'bounded-floor']
-}));
+document.body.appendChild(THREE.VRButton.createButton(renderer));
+```
 
-3. Replace requestAnimationFrame loop with:
+### Required animation loop — use setAnimationLoop, NOT requestAnimationFrame:
+```javascript
+// ✅ CORRECT — works in VR headset
 renderer.setAnimationLoop(function() {
   renderer.render(scene, camera);
 });
 
-ARButton opens an immersive-ar session on Meta Quest — this enables real passthrough.
-scene.background must be set to null and renderer.setClearColor(0,0,0,0) for transparency to work in AR mode.
-
----
-
-## 12. PASSTHROUGH / TRANSPARENT BACKGROUND (Meta Quest AR)
-
-The parent frame sends `{ type: 'passthrough', enabled: true/false }` via postMessage.
-The bridge script (injected automatically) handles this — but it relies on `window._renderer` and `window._scene` being exposed.
-
-**You MUST always include these three lines immediately after creating the renderer and scene:**
-
-```javascript
-window._renderer = renderer;
-window._scene = scene;
-window._sceneBg = scene.background; // save AFTER setting scene.background
+// ❌ WRONG — breaks inside Meta Quest
+function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
+animate();
 ```
 
-**You MUST use `alpha: true` in the WebGLRenderer constructor:**
+### Camera position for VR:
 ```javascript
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setClearColor(0x000000, 1); // starts opaque; bridge sets to 0 for passthrough
+camera.position.set(0, 1.6, 5); // 1.6m eye height — standard for standing VR
 ```
 
-**If you set `scene.background` at any point, immediately update `window._sceneBg`:**
-```javascript
-scene.background = new THREE.Color(0x001133);
-window._sceneBg = scene.background; // keep in sync
-```
-
-**Rules:**
-- Never call `renderer.setClearAlpha(1)` — the bridge controls this
-- Objects with additive blending (`THREE.AdditiveBlending`) look great in passthrough
-- In passthrough mode the bridge sets `scene.background = null` and `renderer.setClearColor(0,0,0,0)`
-- The base template already includes these globals — do not remove them
+### Why this matters:
+- `renderer.xr.enabled = true` activates stereoscopic rendering (left/right eye)
+- `VRButton` shows "Enter VR" only on XR-capable devices (Quest, etc.), hidden on desktop
+- `setAnimationLoop` is the XR-compatible render loop — `requestAnimationFrame` does not work in immersive mode
+- Without these, the Quest browser renders a flat mono view with no 6DOF tracking
