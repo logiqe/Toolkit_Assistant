@@ -93,8 +93,8 @@ Never access document.body or any DOM element outside this wrapper.
 <!-- Three.js core — MUST be first, no defer -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- WebXR VR/AR buttons — required for Meta Quest -->
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/VRButton.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/ARButton.js"></script>
 <script>
 
 // === SCENE SETUP ===
@@ -309,7 +309,7 @@ When multiple assets are present alongside a text description, treat the text as
 If the user's message contains a 3D asset URL (e.g. `/uploads/xxxx_lamp.obj`),
 load it with OBJLoader from the Three.js CDN
 ```html
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/OBJLoader.js"></script>
 const loader = new THREE.OBJLoader();
 loader.load('URL_HERE', (obj) => {
   obj.position.set(0, 0, 0);
@@ -359,8 +359,8 @@ window._sceneBg = scene.background.clone();
 
 ### Required script tags (in `<head>`, after Three.js):
 ```html
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/VRButton.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/webxr/ARButton.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/VRButton.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/ARButton.js"></script>
 ```
 
 ### Required renderer settings:
