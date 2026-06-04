@@ -79,22 +79,102 @@ Never access document.body or any DOM element outside this wrapper.
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0a0a14; overflow: hidden; }
   canvas { display: block; width: 100vw; height: 100vh; }
-  /* VR button styling */
-  #VRButton, #ARButton {
-    position: fixed !important;
-    bottom: 24px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    z-index: 999 !important;
-  }
 </style>
 </head>
 <body>
 <!-- Three.js core — MUST be first, no defer -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- WebXR VR/AR buttons — required for Meta Quest -->
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/VRButton.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/ARButton.js"></script>
+<script>
+// === Inline VRButton (Three.js r128) — avoids CDN failures ===
+THREE.VRButton = {
+  createButton: function(renderer) {
+    const button = document.createElement('button');
+    function showEnterVR() {
+      let currentSession = null;
+      async function onSessionStarted(session) {
+        session.addEventListener('end', onSessionEnded);
+        await renderer.xr.setSession(session);
+        button.textContent = 'EXIT VR';
+        currentSession = session;
+      }
+      function onSessionEnded() {
+        currentSession.removeEventListener('end', onSessionEnded);
+        button.textContent = 'ENTER VR';
+        currentSession = null;
+      }
+      button.style.display = '';
+      button.style.cursor = 'pointer';
+      button.style.left = 'calc(50% - 50px)';
+      button.style.width = '100px';
+      button.textContent = 'ENTER VR';
+      button.onmouseenter = () => button.style.opacity = '1.0';
+      button.onmouseleave = () => button.style.opacity = '0.5';
+      button.onclick = function() {
+        if (currentSession === null) {
+          const sessionInit = { 
+            optionalFeatures: ['local-floor','bounded-floor','hand-tracking','layers'] 
+          };
+          navigator.xr.requestSession('immersive-vr', sessionInit).then(onSessionStarted);
+        } else {
+          currentSession.end();
+        }
+      };
+    }
+    function disableButton() {
+      button.style.display = '';
+      button.style.cursor = 'auto';
+      button.style.left = 'calc(50% - 75px)';
+      button.style.width = '150px';
+      button.onmouseenter = null;
+      button.onmouseleave = null;
+      button.onclick = null;
+    }
+    function showWebXRNotFound() {
+      disableButton();
+      button.textContent = 'VR NOT SUPPORTED';
+    }
+    function stylizeElement(element) {
+      element.style.position = 'absolute';
+      element.style.bottom = '20px';
+      element.style.padding = '12px 6px';
+      element.style.border = '1px solid #fff';
+      element.style.borderRadius = '4px';
+      element.style.background = 'rgba(0,0,0,0.1)';
+      element.style.color = '#fff';
+      element.style.font = 'normal 13px sans-serif';
+      element.style.textAlign = 'center';
+      element.style.opacity = '0.5';
+      element.style.outline = 'none';
+      element.style.zIndex = '999';
+    }
+    if ('xr' in navigator) {
+      button.id = 'VRButton';
+      button.style.display = 'none';
+      stylizeElement(button);
+      navigator.xr.isSessionSupported('immersive-vr').then(function(supported) {
+        supported ? showEnterVR() : showWebXRNotFound();
+      });
+      return button;
+    } else {
+      const message = document.createElement('a');
+      if (window.isSecureContext === false) {
+        message.href = document.location.href.replace(/^http:/, 'https:');
+        message.innerHTML = 'WEBXR NEEDS HTTPS';
+      } else {
+        message.href = 'https://immersiveweb.dev/';
+        message.innerHTML = 'WEBXR NOT AVAILABLE';
+      }
+      message.style.left = 'calc(50% - 90px)';
+      message.style.width = '180px';
+      message.style.textDecoration = 'none';
+      stylizeElement(message);
+      return message;
+    }
+  }
+};
+</script>
+
 <script>
 
 // === SCENE SETUP ===
@@ -221,7 +301,7 @@ window.onSensorUpdate = function(sensors) {
 Apply every single rule to every generated scene:
 
 1. Use `r128` from `cdnjs.cloudflare.com` for Three.js core — no `defer` attribute
-2. Include VRButton and ARButton scripts from jsdelivr CDN (see §13)
+2. VRButton is provided inline in the template (§3) — no external CDN needed
 3. Set `renderer.xr.enabled = true` and append VRButton — required for Meta Quest
 4. Use `renderer.setAnimationLoop()` — never `requestAnimationFrame` (breaks in XR)
 5. Expose `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough
@@ -262,7 +342,8 @@ When hardware context is absent or empty:
 ## 9. ANTI-PATTERNS (NEVER DO)
 
 - Loading external assets (textures, models, fonts) from URLs — keep everything procedural
-- Using `THREE.OrbitControls` or other add-ons not in r128 core (VRButton/ARButton are OK via CDN)
+- Using `THREE.OrbitControls` or other add-ons not in r128 core
+- Loading VRButton.js or ARButton.js from any CDN — use the inline version from §3
 - Using `requestAnimationFrame` loop — **always use `renderer.setAnimationLoop()`** for WebXR compatibility
 - Omitting `renderer.xr.enabled = true` and VRButton — every scene needs it for Meta Quest
 - Omitting `window._renderer`, `window._scene`, `window._sceneBg` globals — passthrough breaks without them
@@ -353,49 +434,19 @@ window._sceneBg = scene.background.clone();
 
 ---
 
-## 13. WEBXR / META QUEST VR MODE
+## 13. WEBXR / META QUEST — REMINDER
 
-**Every scene MUST include these for Meta Quest compatibility:**
+All WebXR setup is already in §3 (template). Just follow it:
 
-### Required script tags (in `<head>`, after Three.js):
-```html
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/VRButton.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/webxr/ARButton.js"></script>
-```
+- `renderer.xr.enabled = true`
+- `THREE.VRButton` is defined inline at the top of the template — 
+  **never load it from a CDN**
+- `document.body.appendChild(THREE.VRButton.createButton(renderer))`
+- Always use `renderer.setAnimationLoop(...)` — never `requestAnimationFrame`
+- `camera.position.set(0, 1.6, 5)` for VR standing eye height
+- Expose `window._renderer = renderer` so the parent frame can trigger XR
 
-### Required renderer settings:
-```javascript
-renderer.xr.enabled = true;
-document.body.appendChild(THREE.VRButton.createButton(renderer));
-```
-
-### Required animation loop — use setAnimationLoop, NOT requestAnimationFrame:
-```javascript
-// ✅ CORRECT — works in VR headset
-renderer.setAnimationLoop(function() {
-  renderer.render(scene, camera);
-});
-
-// ❌ WRONG — breaks inside Meta Quest
-function animate() { requestAnimationFrame(animate); renderer.render(scene, camera); }
-animate();
-```
-
-### Camera position for VR:
-```javascript
-camera.position.set(0, 1.6, 5); // 1.6m eye height — standard for standing VR
-```
-
-### Why this matters:
-- `renderer.xr.enabled = true` activates stereoscopic rendering (left/right eye)
-- `VRButton` shows "Enter VR" only on XR-capable devices (Quest, etc.), hidden on desktop
-- `setAnimationLoop` is the XR-compatible render loop — `requestAnimationFrame` does not work in immersive mode
-- Without these, the Quest browser renders a flat mono view with no 6DOF tracking
-
-## ALWAYS expose renderer globally for XR bridge
-After creating the renderer, always add:
-```javascript
-window._renderer = renderer;
-renderer.xr.enabled = true;
-```
-This allows the parent frame to trigger VR mode programmatically.
+### Why setAnimationLoop matters:
+`requestAnimationFrame` does not fire inside an immersive XR session 
+on Meta Quest. Only `renderer.setAnimationLoop()` works in both 
+desktop and VR contexts.
