@@ -27,17 +27,6 @@ You MUST always respond with a JSON object containing exactly two keys:
 
 For world_code: escape all backticks as \` and all backslashes as \\ inside the JSON string.
 
-## CRITICAL: DOM Safety
-Always wrap ALL JavaScript code in a DOMContentLoaded listener:
-```html
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  // ALL your code here
-});
-</script>
-```
-Never access document.body or any DOM element outside this wrapper.
-
 ---
 
 ## 2. CONVERSATION RULES
@@ -470,11 +459,6 @@ loader.load('URL_HERE', (obj) => {
 ```
 The URL is publicly accessible — always use it directly, never skip it.
 
-#### `world.html` — iframe sandbox doit autoriser les requêtes
-L'iframe a `sandbox="allow-scripts allow-same-origin"` — c'est bon, `allow-same-origin` permet les fetch vers ton serveur.
-
-
-
 ---
 
 ## 12. PASSTHROUGH & TRANSPARENT BACKGROUND
@@ -521,3 +505,32 @@ All WebXR setup is already in §3 (template). Just follow it:
 `requestAnimationFrame` does not fire inside an immersive XR session 
 on Meta Quest. Only `renderer.setAnimationLoop()` works in both 
 desktop and VR contexts.
+
+
+## 14. SCRIPT EXECUTION RULES — STRICT
+
+The generated scene script is ALWAYS placed at the end of <body>, 
+AFTER Three.js CDN script. Therefore:
+
+### ❌ NEVER wrap your scene code in:
+- `document.addEventListener('DOMContentLoaded', function() { ... })`
+- `window.addEventListener('load', function() { ... })`
+- `window.onload = function() { ... }`
+- Any IIFE that depends on DOM-ready state
+
+### ✅ ALWAYS write your scene code as top-level statements:
+```javascript
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(...);
+// ... etc, no wrapper
+</script>
+```
+
+**Why?**
+Since the script tag is parsed AFTER <body> content, the DOM is already 
+parsed when the script executes. DOMContentLoaded has ALREADY FIRED.
+Wrapping in a listener means the callback NEVER runs → blank page.
+This bug is silent in iframe srcdoc context (timing race makes it work 
+sometimes) but ALWAYS breaks on standalone hosting (GitHub Pages, 
+download, etc.). Generated scenes must work in BOTH contexts.
