@@ -42,6 +42,8 @@ ws_connections: dict[str, list[WebSocket]] = {}
 
 # ── World conversation histories: board_id → list of messages ──
 world_histories: dict[str, list[dict]] = {}
+# Stores the latest generated HTML scene per board_id — served via /scene/<board_id>
+world_scenes: dict[str, str] = {}
 
 # --- Render API config ---
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
@@ -388,11 +390,16 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
     if len(world_histories[board_id]) > 40:
         world_histories[board_id] = world_histories[board_id][-40:]
 
+    # Store latest scene for /scene/<board_id> — served as a real URL (no srcdoc)
+    if result.get("world_code"):
+        world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
+
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 
     return {
         "reply": result.get("reply", "Here's your world!"),
-        "world_code": result.get("world_code", None)
+        "world_code": result.get("world_code", None),
+        "scene_url": f"/scene/{board_id}" if result.get("world_code") else None
     }
 
 
@@ -475,8 +482,104 @@ async def world_chat_with_files(
     if len(world_histories[board_id]) > 40:
         world_histories[board_id] = world_histories[board_id][-40:]
 
+    if result.get("world_code"):
+        world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
+
     print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
-    return {"reply": result.get("reply", "Here's your world!"), "world_code": result.get("world_code", None)}
+    return {
+        "reply": result.get("reply", "Here's your world!"),
+        "world_code": result.get("world_code", None),
+        "scene_url": f"/scene/{board_id}" if result.get("world_code") else None
+    }
+
+
+def _inject_sensor_bridge(html: str) -> str:
+    """
+    Inject the sensor + passthrough bridge into the generated HTML.
+    Done server-side so the scene is served as a real URL (no srcdoc needed).
+    The bridge runs AFTER Three.js loads (injected before </body>).
+    """
+    bridge = """
+<script>
+// ── Toolkit Sensor & Passthrough Bridge ──
+window.sensorData = {};
+window._passthroughActive = false;
+
+window.addEventListener('message', function(e) {
+  if (!e.data) return;
+
+  // Sensor bridge
+  if (e.data.type === 'sensor') {
+    window.sensorData = e.data.data;
+    if (typeof window.onSensorUpdate === 'function') {
+      window.onSensorUpdate(e.data.data);
+    }
+  }
+
+  // Passthrough: set flag + apply immediately
+  if (e.data.type === 'passthrough') {
+    window._passthroughActive = e.data.enabled;
+    document.documentElement.style.background = e.data.enabled ? 'transparent' : '';
+    document.body.style.background = e.data.enabled ? 'transparent' : '';
+    if (window._renderer) {
+      window._renderer.setClearColor(0x000000, e.data.enabled ? 0 : 1);
+    }
+    if (window._scene) {
+      window._scene.background = e.data.enabled ? null : (window._sceneBg || null);
+    }
+  }
+});
+
+// Patch setAnimationLoop to maintain passthrough every frame
+// (prevents renderer from overwriting clear color each frame)
+if (window._renderer && window._renderer.setAnimationLoop) {
+  const _origLoop = window._renderer.setAnimationLoop.bind(window._renderer);
+  window._renderer.setAnimationLoop = function(cb) {
+    _origLoop(cb ? function(t, frame) {
+      if (window._passthroughActive && window._renderer) {
+        window._renderer.setClearColor(0x000000, 0);
+        if (window._scene) window._scene.background = null;
+      }
+      cb(t, frame);
+    } : null);
+  };
+}
+</script>
+"""
+    if '</body>' in html:
+        return html.replace('</body>', bridge + '</body>', 1)
+    return html + bridge
+
+
+@app.get("/scene/{board_id}")
+async def get_scene(board_id: str):
+    """
+    Serve the latest generated 3D scene as a standalone HTML page.
+    Using a real URL (instead of srcdoc) is required for WebXR on Meta Quest.
+    """
+    html = world_scenes.get(board_id)
+    if not html:
+        # Try to reconstruct from history
+        history = world_histories.get(board_id, [])
+        for msg in reversed(history):
+            if msg.get("role") == "assistant":
+                try:
+                    data = json.loads(msg["content"])
+                    if data.get("world_code"):
+                        html = _inject_sensor_bridge(data["world_code"])
+                        world_scenes[board_id] = html
+                        break
+                except Exception:
+                    pass
+
+    if not html:
+        return HTMLResponse(
+            "<html><body style='background:#111;color:#fff;font-family:sans-serif;"
+            "display:flex;align-items:center;justify-content:center;height:100vh'>"
+            "<p>No scene generated yet. Go back and describe your world.</p></body></html>",
+            status_code=404
+        )
+    return HTMLResponse(html)
 
 
 def build_hardware_context(board_id: str) -> dict:

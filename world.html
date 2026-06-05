@@ -63,9 +63,8 @@
     <div id="flash-overlay"></div>
     <iframe 
       id="world-frame" 
-      style="display:none;" 
-      sandbox="allow-scripts allow-same-origin"
-      allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera"
+      style="display:none;"
+      allow="xr-spatial-tracking; fullscreen; accelerometer; gyroscope; magnetometer; camera; autoplay"
       allowfullscreen></iframe>
     <div class="sensor-overlay" id="sensorOverlay"></div>
   </div>
@@ -352,14 +351,21 @@ async function sendMessage() {
     removeLoading();
     addMsg('ai', data.reply);
 
-    if (data.world_code) {
-      injectWorld(data.world_code);
+    if (data.scene_url) {
+      currentSceneUrl = data.scene_url;
+      injectWorld(data.world_code || '');
+      if (data.world_code) {
+        localStorage.setItem(WORLD_CODE_KEY, data.world_code);
+        localStorage.setItem('scene_url_latest', data.scene_url);
+      }
+    } else if (data.world_code) {
+      // Fallback (desktop): no scene_url
+      worldCode = data.world_code;
       localStorage.setItem(WORLD_CODE_KEY, data.world_code);
-      localStorage.setItem('world_code_latest', data.world_code); // ← ajoute ça
-    } else {
-      const saved = localStorage.getItem(WORLD_CODE_KEY) 
-                || localStorage.getItem('world_code_latest');
-      if (saved) injectWorld(saved);
+      const frame = document.getElementById('world-frame');
+      frame.srcdoc = data.world_code;
+      frame.style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
     }
     saveChatHistory();
 
@@ -377,71 +383,28 @@ function injectWorld(html) {
   const frame = document.getElementById('world-frame');
   const emptyState = document.getElementById('emptyState');
 
-  // Bridge injected BEFORE </body> so Three.js is already loaded when it runs
-  const bridgeScript = `
-    <script>
-    window.sensorData = {};
-    window.addEventListener('message', function(e) {
-      if (!e.data) return;
+  // IMPORTANT: use src= pointing to /scene/<board_id> — NOT srcdoc.
+  // srcdoc + sandbox blocks WebXR on Meta Quest (session never starts).
+  // The bridge (sensor + passthrough) is injected server-side in /scene/<board_id>.
+  if (currentSceneUrl) {
+    frame.src = currentSceneUrl + '?t=' + Date.now(); // cache-bust
+  }
 
-      // ── Sensor bridge ──
-      if (e.data.type === 'sensor') {
-        window.sensorData = e.data.data;
-        if (typeof window.onSensorUpdate === 'function') {
-          window.onSensorUpdate(e.data.data);
-        }
-      }
-
-      if (e.data.type === 'enter-vr') {
-        const vrBtn = document.getElementById('VRButton');
-        if (vrBtn) {
-          vrBtn.click();
-        } else {
-          console.warn('VRButton not found in scene');
-        }
-      }
-
-      // ── Passthrough bridge ──
-      // Relies on window._renderer and window._scene exposed by the generated scene
-      if (e.data.type === 'passthrough') {
-        const enabled = e.data.enabled;
-        document.documentElement.style.background = enabled ? 'transparent' : '';
-        document.body.style.background = enabled ? 'transparent' : '';
-
-        if (window._renderer) {
-          window._renderer.setClearColor(0x000000, enabled ? 0 : 1);
-          if (window._renderer.domElement) {
-            window._renderer.domElement.style.background = 'transparent';
-          }
-        }
-        if (window._scene) {
-          window._scene.background = enabled ? null : (window._sceneBg || null);
-        }
-      }
-    });
-    <\/script>
-  `;
-
-  // Insert bridge just before </body> so Three.js CDN script is already executed
-  const injected = html.includes('</body>')
-    ? html.replace('</body>', bridgeScript + '</body>')
-    : html + bridgeScript;
-
-  // Use srcdoc for sandboxed rendering
-  frame.srcdoc = injected;
   frame.style.display = 'block';
   emptyState.style.display = 'none';
 
-  // Re-apply passthrough after iframe reloads
   frame.addEventListener('load', () => {
+    // Re-apply passthrough if active
     if (passthroughEnabled && frame.contentWindow) {
-      // Small delay to let Three.js finish init and expose window._renderer
       setTimeout(() => {
         frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
-      }, 500);
+      }, 800);
     }
   }, { once: true });
 }
+
+// Current scene URL (set when server returns scene_url)
+let currentSceneUrl = null;
 
 // ── PASSTHROUGH STATE ──
 let passthroughEnabled = false;
@@ -482,18 +445,25 @@ document.getElementById('passthroughBtn').addEventListener('click', () => {
   const btn = document.getElementById('passthroughBtn');
   btn.classList.toggle('active', passthroughEnabled);
   btn.textContent = passthroughEnabled ? '● Passthrough ON' : '◌ Passthrough';
+
   const panel = document.getElementById('worldPanel');
   const frame = document.getElementById('world-frame');
+
+  // Make parent containers transparent
+  panel.style.background = passthroughEnabled ? 'transparent' : '#080808';
+
+  // iframe background — must use both style and postMessage
   if (passthroughEnabled) {
-    panel.style.background = 'transparent';
-    frame.style.background = 'transparent';
-    frame.style.cssText += '; background: transparent !important;';
-    if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');
+    frame.style.setProperty('background', 'transparent', 'important');
+    frame.style.setProperty('background-color', 'transparent', 'important');
   } else {
-    panel.style.background = '#080808';
-    frame.style.background = '';
     frame.style.removeProperty('background');
-    if (frame.contentWindow) frame.contentWindow.postMessage({ type: 'passthrough', enabled: false }, '*');
+    frame.style.removeProperty('background-color');
+  }
+
+  // Post to iframe — now works because iframe uses src= (real origin), not srcdoc (null origin)
+  if (frame.contentWindow) {
+    frame.contentWindow.postMessage({ type: 'passthrough', enabled: passthroughEnabled }, '*');
   }
 });
 document.getElementById('clearBtn').addEventListener('click', clearHistory);
@@ -532,18 +502,26 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
       showWelcome();
     }
     
-    // Restore world
+    // Restore world — prefer /scene/<board_id> URL
     if (data.world_code) {
+      // world_code present: scene is available at /scene/<board_id>
+      currentSceneUrl = `/scene/${boardId || 'none'}`;
       injectWorld(data.world_code);
     } else {
-      // Fallback: try localStorage (covers board_id change case)
-      const saved = localStorage.getItem(WORLD_CODE_KEY);
-      if (saved) {
-        injectWorld(saved);
+      // Fallback: try saved scene URL from localStorage
+      const savedUrl = localStorage.getItem('scene_url_latest');
+      if (savedUrl) {
+        currentSceneUrl = savedUrl;
+        injectWorld('');
       } else {
-        // Try the 'none' key as last resort
-        const savedLatest = localStorage.getItem('world_code_latest');
-        if (savedLatest) injectWorld(savedLatest);
+        const saved = localStorage.getItem(WORLD_CODE_KEY);
+        if (saved) {
+          worldCode = saved;
+          const frame = document.getElementById('world-frame');
+          frame.srcdoc = saved;
+          frame.style.display = 'block';
+          document.getElementById('emptyState').style.display = 'none';
+        }
       }
     }
   } catch(e) {
