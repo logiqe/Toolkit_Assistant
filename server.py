@@ -292,8 +292,8 @@ async def startup():
 
 @app.get("/")
 async def index(user_token: str = Cookie(default=None)):
-    if not is_user(user_token):
-        return RedirectResponse("/login")
+#    if not is_user(user_token):
+#        return RedirectResponse("/login")
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
