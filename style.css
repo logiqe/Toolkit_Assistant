@@ -791,12 +791,12 @@ header {
 
 .credit {
   position: fixed;
-  bottom: 8px;
+  bottom: 70px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 7px;
-  color: #888;
-  opacity: 0.6;
+  font-size: 11px;
+  color: #5E2A03;
+  opacity: 0.4;
   white-space: nowrap;
   z-index: 100;
 }
