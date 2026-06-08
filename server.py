@@ -305,8 +305,8 @@ async def get_style():
 
 @app.get("/world")
 async def get_world_page(user_token: str = Cookie(default=None)):
-    if not is_user(user_token):
-        return RedirectResponse("/login")
+#    if not is_user(user_token):
+#        return RedirectResponse("/login")
     with open("world.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
