@@ -12,10 +12,16 @@ import secrets
 import base64
 import httpx
 import paho.mqtt.client as mqtt
+import smtplib, random, time
+
+from email.mime.text import MIMEText
 
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
+
+pending_verifications: dict[str, dict] = {}
+user_sessions: set[str] = set() 
 
 # ── World Builder import ──
 try:
@@ -246,10 +252,30 @@ class ConfigUpdate(BaseModel):
     value: str
 
 
+class EmailInput(BaseModel):
+    email: str
+
+class CodeInput(BaseModel):
+    email: str
+    code: str
+
 # --- Helpers ---
 def is_admin(admin_token: str = Cookie(default=None)) -> bool:
     return admin_token in admin_sessions
 
+def is_user(user_token: str | None) -> bool:
+    return user_token in user_sessions
+
+def _send_email(to: str, code: str):
+    SMTP_USER = os.environ.get("SMTP_USER")   # ex: monapp@gmail.com
+    SMTP_PASS = os.environ.get("SMTP_PASS")   # App Password Gmail
+    msg = MIMEText(f"Your access code: {code}\n\nValid for 10 minutes.")
+    msg["Subject"] = "Your access code"
+    msg["From"] = SMTP_USER
+    msg["To"] = to
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+        s.login(SMTP_USER, SMTP_PASS)
+        s.sendmail(SMTP_USER, to, msg.as_string())
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC ROUTES
@@ -265,7 +291,9 @@ async def startup():
 
 
 @app.get("/")
-def get_webpage():
+async def index(user_token: str = Cookie(default=None)):
+    if not is_user(user_token):
+        return RedirectResponse("/login")
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -276,8 +304,9 @@ async def get_style():
 
 
 @app.get("/world")
-async def get_world_page():
-    """Serve the World Builder interface."""
+async def get_world_page(user_token: str = Cookie(default=None)):
+    if not is_user(user_token):
+        return RedirectResponse("/login")
     with open("world.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -929,3 +958,30 @@ async def clear_world_history(board_id: str = Query(...)):
     world_histories.pop(board_id, None)
     save_world_states()
     return {"status": "cleared"}
+
+@app.get("/login")
+async def user_login_page():
+    with open("login_user.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+@app.post("/user/send-code")
+async def send_code(data: EmailInput):
+    code = str(random.randint(100000, 999999))
+    pending_verifications[data.email] = {
+        "code": code,
+        "expires": time.time() + 600
+    }
+    await asyncio.to_thread(_send_email, data.email, code)  # ← non-bloquant
+    return {"status": "sent"}
+
+@app.post("/user/verify-code")
+async def verify_code(data: CodeInput, response: Response):
+    entry = pending_verifications.get(data.email)
+    if not entry or time.time() > entry["expires"] or entry["code"] != data.code:
+        return JSONResponse({"error": "Invalid or expired code"}, status_code=401)
+    
+    token = secrets.token_hex(32)
+    user_sessions.add(token)
+    del pending_verifications[data.email]
+    response.set_cookie("user_token", token, httponly=True, samesite="strict")
+    return {"status": "ok"}

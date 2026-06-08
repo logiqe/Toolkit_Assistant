@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Toolkit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #0f0f0f;
+      font-family: 'DM Sans', sans-serif;
+      color: #fff;
+    }
+
+    .login-box {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .login-box h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.2rem;
+      margin: 0 0 0.5rem 0;
+      color: #fff;
+    }
+
+    .login-box p {
+      color: #888;
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
+    .login-box input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1rem;
+      font-family: 'DM Sans', sans-serif;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .login-box input:focus {
+      border-color: #666;
+    }
+
+    .login-box button {
+      width: 100%;
+      padding: 0.75rem;
+      background: #fff;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: 'Space Mono', monospace;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .login-box button:hover {
+      background: #ddd;
+    }
+
+    .error-msg {
+      color: #ff6b6b;
+      font-size: 0.85rem;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-box">
+    <h1>Toolkit Access</h1>
+
+    <!-- Étape 1 : saisie email -->
+    <div id="step-email">
+      <p>Enter your email to receive an access code.</p>
+      <br>
+      <input type="email" id="email-input" placeholder="your@email.com">
+      <br><br>
+      <button onclick="sendCode()">Send code →</button>
+    </div>
+
+    <!-- Étape 2 : saisie code -->
+    <div id="step-code" style="display:none">
+      <p>Check your inbox — a 6-digit code was sent.</p>
+      <br>
+      <input type="text" id="code-input" placeholder="123456" 
+             maxlength="6" inputmode="numeric">
+      <br><br>
+      <span class="error-msg" id="error-msg">Invalid or expired code.</span>
+      <button onclick="verifyCode()">Sign in →</button>
+    </div>
+  </div>
+
+  <script>
+    let userEmail = "";
+
+    async function sendCode() {
+      userEmail = document.getElementById("email-input").value.trim();
+      if (!userEmail) return;
+
+      const btn = document.querySelector("#step-email button");
+      btn.textContent = "Sending...";
+      btn.disabled = true;
+
+      const res = await fetch("/user/send-code", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ email: userEmail })
+      });
+
+      if (res.ok) {
+        document.getElementById("step-email").style.display = "none";
+        document.getElementById("step-code").style.display = "block";
+      } else {
+        btn.textContent = "Send code →";
+        btn.disabled = false;
+        alert("Error sending email. Try again.");
+      }
+    }
+
+    async function verifyCode() {
+      const code = document.getElementById("code-input").value.trim();
+      if (!code) return;
+
+      const res = await fetch("/user/verify-code", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ email: userEmail, code })
+      });
+
+      if (res.ok) {
+        window.location.href = "/";
+      } else {
+        document.getElementById("error-msg").style.display = "block";
+      }
+    }
+
+    // Valider avec Entrée
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      if (document.getElementById("step-code").style.display !== "none") {
+        verifyCode();
+      } else {
+        sendCode();
+      }
+    });
+  </script>
+
+</body>
+</html>
