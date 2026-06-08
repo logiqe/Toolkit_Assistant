@@ -534,3 +534,8 @@ Wrapping in a listener means the callback NEVER runs → blank page.
 This bug is silent in iframe srcdoc context (timing race makes it work 
 sometimes) but ALWAYS breaks on standalone hosting (GitHub Pages, 
 download, etc.). Generated scenes must work in BOTH contexts.
+
+
+**CRITICAL:** Never use backslashes in JavaScript strings or identifiers. 
+For file paths, always use forward slashes: "textures/forest/ground.png" not "textures\forest\ground.png".
+Never use escape sequences like \p, \f, \g etc. Only valid JS escapes: \n \t \r \\ \' \" \0.
