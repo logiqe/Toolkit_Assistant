@@ -411,10 +411,14 @@ let passthroughEnabled = false;
 
 // ── TOOLBAR ──
 document.getElementById('vrBtn').addEventListener('click', () => {
-  const frame = document.getElementById('world-frame');
-  if (frame && frame.contentWindow) {
-    frame.contentWindow.postMessage({ type: 'enter-vr' }, '*');
+  if (!currentSceneUrl) {
+    alert('Generate a world first, then click Enter VR.');
+    return;
   }
+  // Open in new tab — WebXR requires top-level browsing context on Meta Quest
+  // Pass board_id so the standalone scene can connect WebSocket for live sensors
+  const vrUrl = currentSceneUrl + '?vr=1&board_id=' + (boardId || 'none');
+  window.open(vrUrl, '_blank');
 });
 
 document.getElementById('fullscreenBtn').addEventListener('click', () => {

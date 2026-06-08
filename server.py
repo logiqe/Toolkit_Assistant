@@ -493,57 +493,77 @@ async def world_chat_with_files(
     }
 
 
-def _inject_sensor_bridge(html: str) -> str:
+def _inject_sensor_bridge(html: str, standalone: bool = False) -> str:
     """
     Inject the sensor + passthrough bridge into the generated HTML.
-    Done server-side so the scene is served as a real URL (no srcdoc needed).
-    The bridge runs AFTER Three.js loads (injected before </body>).
+    standalone=True adds a WebSocket client so the scene can receive sensor
+    data when opened directly (not inside an iframe).
+    The bridge is injected before </body> so Three.js is already loaded.
     """
-    bridge = """
+    ws_client = ""
+    if standalone:
+        ws_client = """
+// ── Standalone WebSocket sensor client ──
+// Reads board_id from URL params and connects directly to /ws/<board_id>
+(function() {
+  const params = new URLSearchParams(location.search);
+  const bid = params.get('board_id');
+  if (!bid || bid === 'none') return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  function connect() {
+    const ws = new WebSocket(proto + '://' + location.host + '/ws/' + bid);
+    ws.onmessage = function(e) {
+      try {
+        const msg = JSON.parse(e.data);
+        const data = msg.data || msg;
+        if (data && typeof window.onSensorUpdate === 'function') {
+          window.onSensorUpdate(data);
+        }
+      } catch(_) {}
+    };
+    ws.onclose = function() { setTimeout(connect, 3000); };
+  }
+  connect();
+})();
+"""
+
+    bridge = f"""
 <script>
 // ── Toolkit Sensor & Passthrough Bridge ──
-window.sensorData = {};
+window.sensorData = {{}};
 window._passthroughActive = false;
 
-window.addEventListener('message', function(e) {
+window.addEventListener('message', function(e) {{
   if (!e.data) return;
-
-  // Sensor bridge
-  if (e.data.type === 'sensor') {
+  if (e.data.type === 'sensor') {{
     window.sensorData = e.data.data;
-    if (typeof window.onSensorUpdate === 'function') {
-      window.onSensorUpdate(e.data.data);
-    }
-  }
-
-  // Passthrough: set flag + apply immediately
-  if (e.data.type === 'passthrough') {
+    if (typeof window.onSensorUpdate === 'function') window.onSensorUpdate(e.data.data);
+  }}
+  if (e.data.type === 'passthrough') {{
     window._passthroughActive = e.data.enabled;
     document.documentElement.style.background = e.data.enabled ? 'transparent' : '';
     document.body.style.background = e.data.enabled ? 'transparent' : '';
-    if (window._renderer) {
-      window._renderer.setClearColor(0x000000, e.data.enabled ? 0 : 1);
-    }
-    if (window._scene) {
-      window._scene.background = e.data.enabled ? null : (window._sceneBg || null);
-    }
-  }
-});
+    if (window._renderer) window._renderer.setClearColor(0x000000, e.data.enabled ? 0 : 1);
+    if (window._scene) window._scene.background = e.data.enabled ? null : (window._sceneBg || null);
+  }}
+}});
 
-// Patch setAnimationLoop to maintain passthrough every frame
-// (prevents renderer from overwriting clear color each frame)
-if (window._renderer && window._renderer.setAnimationLoop) {
-  const _origLoop = window._renderer.setAnimationLoop.bind(window._renderer);
-  window._renderer.setAnimationLoop = function(cb) {
-    _origLoop(cb ? function(t, frame) {
-      if (window._passthroughActive && window._renderer) {
-        window._renderer.setClearColor(0x000000, 0);
+// Maintain passthrough every frame via setAnimationLoop patch
+(function() {{
+  const _origSet = THREE && THREE.WebGLRenderer && THREE.WebGLRenderer.prototype.setAnimationLoop;
+  if (!_origSet) return;
+  THREE.WebGLRenderer.prototype.setAnimationLoop = function(cb) {{
+    _origSet.call(this, cb ? function(t, frame) {{
+      if (window._passthroughActive) {{
+        this.setClearColor(0x000000, 0);
         if (window._scene) window._scene.background = null;
-      }
+      }}
       cb(t, frame);
-    } : null);
-  };
-}
+    }}.bind(this) : null);
+  }};
+}})();
+
+{ws_client}
 </script>
 """
     if '</body>' in html:
@@ -552,13 +572,16 @@ if (window._renderer && window._renderer.setAnimationLoop) {
 
 
 @app.get("/scene/{board_id}")
-async def get_scene(board_id: str):
+async def get_scene(board_id: str, vr: str = "0"):
     """
     Serve the latest generated 3D scene as a standalone HTML page.
-    Using a real URL (instead of srcdoc) is required for WebXR on Meta Quest.
+    This is a top-level document — required for WebXR on Meta Quest.
+    ?vr=1 adds a standalone WebSocket client for live sensor data.
     """
-    html = world_scenes.get(board_id)
-    if not html:
+    standalone = vr == "1"
+    raw_html = world_scenes.get(board_id)
+
+    if not raw_html:
         # Try to reconstruct from history
         history = world_histories.get(board_id, [])
         for msg in reversed(history):
@@ -566,20 +589,25 @@ async def get_scene(board_id: str):
                 try:
                     data = json.loads(msg["content"])
                     if data.get("world_code"):
-                        html = _inject_sensor_bridge(data["world_code"])
-                        world_scenes[board_id] = html
+                        raw_html = data["world_code"]
                         break
                 except Exception:
                     pass
 
-    if not html:
+    if not raw_html:
         return HTMLResponse(
-            "<html><body style='background:#111;color:#fff;font-family:sans-serif;"
-            "display:flex;align-items:center;justify-content:center;height:100vh'>"
-            "<p>No scene generated yet. Go back and describe your world.</p></body></html>",
+            "<!DOCTYPE html><html><body style='background:#111;color:#fff;"
+            "font-family:sans-serif;display:flex;align-items:center;"
+            "justify-content:center;height:100vh'>"
+            "<p>No scene generated yet. Go back and describe your world.</p>"
+            "</body></html>",
             status_code=404
         )
+
+    # Always inject bridge; standalone adds WS client for sensor data
+    html = _inject_sensor_bridge(raw_html, standalone=standalone)
     return HTMLResponse(html)
+
 
 
 def build_hardware_context(board_id: str) -> dict:
