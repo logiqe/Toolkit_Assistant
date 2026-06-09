@@ -305,6 +305,16 @@ header {
   color: var(--accent);
 }
 
+.header-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(94,42,3,0.5);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.header-title span { color: #FF8B33; }
+
 .world-page .header-title {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -365,7 +375,7 @@ header {
   letter-spacing: 0.05em;
   transition: all 0.15s;
 }
-.world-page .clear-btn:hover { border-color: #e05555; color: #e05555; }
+.world-page .clear-btn:hover { border-color: #FF8B33; color: #FF8B33; }
 
 .world-page #chatbox {
   flex: 1;
@@ -719,11 +729,11 @@ header {
 
 .clear-btn-warm {
   background: none;
-  border: 1px solid rgba(94,42,3,0.15);
-  color: rgba(94,42,3,0.4);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   padding: 3px 8px;
   border-radius: 5px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   cursor: pointer;
   letter-spacing: 0.05em;
