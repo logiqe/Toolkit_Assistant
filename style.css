@@ -242,6 +242,27 @@ header {
   }
 }
 
+
+/* ── ws-indicator warm (index.html) ── */
+.ws-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: rgba(94,42,3,0.4);
+}
+.ws-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(94,42,3,0.2);
+  transition: background 0.3s;
+}
+.ws-dot.connected { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.ws-dot.active    { background: #FF8B33; box-shadow: 0 0 6px #FF8B33; }
+
+/* world-page overrides its own ws-indicator colors via its scoped rules */
+
 /* ════════════════════════════════════════════
  WORLD BUILDER PAGE  (.world-page)
  ════════════════════════════════════════════ */
@@ -721,14 +742,6 @@ header {
   transition: opacity 0.1s;
 }  
 
-/* ── Header app title ── */
-.header-app-title {
-  font-family: 'Space Mono', monospace;
-  font-size: 0.95em;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #5E2A03;
-}
 
 /* ── Chat label bar (index) ── */
 .chat-label-bar {

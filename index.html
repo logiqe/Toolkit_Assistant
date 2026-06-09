@@ -13,7 +13,7 @@
 
     <header>
         <div class="header-left">
-            <span class="header-app-title">Toolkit Assistant</span>
+            <div class="header-title">TOOLKIT ASSISTANT / <span>Artefact Builder</span></div>
         </div>
         <div class="header-right">
             <div class="mode-toggle" id="mode-toggle">
@@ -21,13 +21,16 @@
                 <span class="mode-sep"></span>
                 <span class="mode-option" id="mode-vr">VR</span>
             </div>
-            <button id="reset-btn" title="Restart">⟳</button>
+            <div class="ws-indicator" id="ws-indicator">
+                <div class="ws-dot" id="ws-dot"></div>
+                <span id="ws-label">board not connected</span>
+            </div>
         </div>
     </header>
 
     <div class="chat-label-bar">
         <span>Talk to your board</span>
-        <button id="reset-btn-2" class="clear-btn-warm">⟳ Reset</button>
+        <button id="reset-btn" class="clear-btn-warm">⟳ Reset</button>
     </div>
 
     <div id="chatbox"></div>
@@ -200,7 +203,6 @@
         }
 
         document.getElementById("reset-btn").addEventListener("click", doReset);
-        document.getElementById("reset-btn-2").addEventListener("click", doReset);
     </script>
 </body>
 </html>
