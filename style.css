@@ -13,35 +13,18 @@ body {
   height: 100dvh;
 }
 
-/* --- HEADER --- */
+/* --- HEADER (shared baseline — identical height/padding on both pages) --- */
 header {
-  background-color: #FFE3CE;
-  padding: 16px clamp(15px, 5vw, 10%); 
+  height: 52px;
+  box-sizing: border-box;
+  padding: 0 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid rgba(0,0,0,0.05);
-  font-size: 1em;
-  font-weight: 700;
-  font-family: 'Space Mono', monospace;
-  color: #5E2A03;
-}
-
-#reset-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #5E2A03;
-  transition: transform 0.2s;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  margin-right: 15px; 
-}
-
-#reset-btn:hover {
-  color: #FF8B33;
+  background-color: #FFE3CE;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 /* --- CHAT ZONE --- */
@@ -87,13 +70,7 @@ header {
   }
 
   header {
-      padding: 12px 15px;
-      font-size: 1em;
-  }
-
-  #reset-btn {
-      font-size: 20px;
-      margin-right: 0;
+      padding: 0 15px;
   }
 
   .countdown-box {
@@ -297,18 +274,8 @@ header {
 
 /* ── Header ── */
 .world-page header {
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
   background: transparent;
-  font-size: inherit;
-  font-weight: inherit;
-  color: inherit;
-  gap: 12px;
+  border-bottom-color: var(--border);
 }
 
 .world-page .header-left {
@@ -346,14 +313,7 @@ header {
 }
 .world-page .header-title span { color: var(--accent); }
 
-.world-page .ws-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-}
+.world-page 
 .world-page .ws-dot {
   width: 7px; height: 7px;
   border-radius: 50%;
@@ -872,10 +832,6 @@ header {
   background: rgba(255,255,255,0.1) !important;
 }
 
-/* Ajustement header pour accueillir le bouton */
-header {
-  gap: 10px;
-}
 .header-left {
   display: flex;
   align-items: center;
