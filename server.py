@@ -13,6 +13,7 @@ import base64
 import httpx
 import paho.mqtt.client as mqtt
 import smtplib, random, time
+import resend
 
 from email.mime.text import MIMEText
 
@@ -267,15 +268,12 @@ def is_user(user_token: str | None) -> bool:
     return user_token in user_sessions
 
 def _send_email(to: str, code: str):
-    SMTP_USER = os.environ.get("SMTP_USER")   # ex: monapp@gmail.com
-    SMTP_PASS = os.environ.get("SMTP_PASS")   # App Password Gmail
-    msg = MIMEText(f"Your access code: {code}\n\nValid for 10 minutes.")
-    msg["Subject"] = "Your access code"
-    msg["From"] = SMTP_USER
-    msg["To"] = to
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(SMTP_USER, SMTP_PASS)
-        s.sendmail(SMTP_USER, to, msg.as_string())
+    resend.Emails.send({
+        "from": "toolkit@tondomaine.com",
+        "to": to,
+        "subject": "Your access code",
+        "text": f"Your code: {code}"
+    })
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC ROUTES
