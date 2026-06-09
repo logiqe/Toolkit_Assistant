@@ -140,21 +140,25 @@
       }
     }
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const boardId = urlParams.get('board_id');
+
     async function verifyCode() {
-      const code = document.getElementById("code-input").value.trim();
-      if (!code) return;
+        const code = document.getElementById("code-input").value.trim();
+        if (!code) return;
 
-      const res = await fetch("/user/verify-code", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ email: userEmail, code })
-      });
+        const res = await fetch("/user/verify-code", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ email: userEmail, code, board_id: boardId })
+        });
 
-      if (res.ok) {
-        window.location.href = "/";
-      } else {
-        document.getElementById("error-msg").style.display = "block";
-      }
+        if (res.ok) {
+            // Rediriger vers / avec le board_id
+            window.location.href = boardId ? `/?board_id=${boardId}` : "/";
+        } else {
+            document.getElementById("error-msg").style.display = "block";
+        }
     }
 
     // Valider avec Entrée

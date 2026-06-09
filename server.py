@@ -291,9 +291,10 @@ async def startup():
 
 
 @app.get("/")
-async def index(user_token: str = Cookie(default=None)):
-#    if not is_user(user_token):
-#        return RedirectResponse("/login")
+async def index(request: Request, board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
+    if not is_user(user_token):
+        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+        return RedirectResponse(redirect_url)
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -304,9 +305,10 @@ async def get_style():
 
 
 @app.get("/world")
-async def get_world_page(user_token: str = Cookie(default=None)):
-#    if not is_user(user_token):
-#        return RedirectResponse("/login")
+async def get_world_page(board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
+    if not is_user(user_token):
+        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+        return RedirectResponse(redirect_url)
     with open("world.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -341,8 +343,15 @@ async def reset_conversation(board_id: str = Query(...)):
 
 
 @app.post("/chat")
-async def chat_with_ai(user_input: UserInput, board_id: str = Query(...)):
-    session = get_session(board_id)
+async def chat_with_ai(
+    user_input: UserInput,
+    board_id: str = Query(...),
+    session_id: str = Cookie(default=None),
+    user_token: str = Cookie(default=None)
+):
+    # Utilise session_id si dispo, sinon fallback board_id (rétrocompat)
+    key = session_id if session_id else board_id
+    session = get_session(key)
     if session["thread_id"] is None:
         session["thread_id"] = await create_new_thread()
 
@@ -974,6 +983,12 @@ async def send_code(data: EmailInput):
     await asyncio.to_thread(_send_email, data.email, code)  # ← non-bloquant
     return {"status": "sent"}
 
+
+class CodeInput(BaseModel):
+    email: str
+    code: str
+    board_id: str | None = None  # ← ajouter
+
 @app.post("/user/verify-code")
 async def verify_code(data: CodeInput, response: Response):
     entry = pending_verifications.get(data.email)
@@ -983,5 +998,11 @@ async def verify_code(data: CodeInput, response: Response):
     token = secrets.token_hex(32)
     user_sessions.add(token)
     del pending_verifications[data.email]
+    
+    # Créer un session_id unique par utilisateur (email + board)
+    session_id = f"{data.board_id or 'unknown'}_{secrets.token_hex(8)}"
+    
     response.set_cookie("user_token", token, httponly=True, samesite="strict")
-    return {"status": "ok"}
+    response.set_cookie("session_id", session_id, httponly=True, samesite="strict")
+    
+    return {"status": "ok", "session_id": session_id}
