@@ -238,6 +238,22 @@ header {
 .ws-dot.connected { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
 .ws-dot.active    { background: #FF8B33; box-shadow: 0 0 6px #FF8B33; }
 
+.world-page .ws-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.world-page .ws-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: background 0.3s;
+}
+
 /* world-page overrides its own ws-indicator colors via its scoped rules */
 
 /* ════════════════════════════════════════════
@@ -309,7 +325,7 @@ header {
   font-family: 'Space Mono', monospace;
   font-size: 13px;
   font-weight: 400;
-  color: rgba(94,42,3,0.5);
+  color: #5E2A03;
   letter-spacing: 0.05em;
   white-space: nowrap;
 }
@@ -370,7 +386,7 @@ header {
   padding: 3px 8px;
   border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
   letter-spacing: 0.05em;
   transition: all 0.15s;
@@ -729,12 +745,12 @@ header {
 
 .clear-btn-warm {
   background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
+  border: 1px solid rgba(94,42,3,0.15);
+  color: rgba(94,42,3,0.4);
   padding: 3px 8px;
   border-radius: 5px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   cursor: pointer;
   letter-spacing: 0.05em;
   transition: all 0.15s;
