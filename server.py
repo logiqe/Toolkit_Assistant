@@ -268,12 +268,23 @@ def is_user(user_token: str | None) -> bool:
     return user_token in user_sessions
 
 def _send_email(to: str, code: str):
-    resend.Emails.send({
-        "from": "toolkit@tondomaine.com",
-        "to": to,
-        "subject": "Your access code",
-        "text": f"Your code: {code}"
-    })
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+    with httpx.Client() as client:
+        r = client.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": "Toolkit <onboarding@resend.dev>",
+                "to": [to],
+                "subject": "Your access code",
+                "text": f"Your access code: {code}\n\nValid for 10 minutes."
+            }
+        )
+    if r.status_code != 200:
+        raise Exception(f"Resend error: {r.status_code} {r.text}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC ROUTES
