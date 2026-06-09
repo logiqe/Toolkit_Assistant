@@ -533,7 +533,7 @@ header {
   color: unset;
 }
 .world-page .send-btn:hover { opacity: 0.85; }
-.world-page .send-btn svg  { width: 15px; height: 15px; fill: #1a0a00; transform: none; }
+.world-page .send-btn svg  { width: 15px; height: 15px; fill: #fff; transform: none; }
 
 /* ── World panel ── */
 .world-page .world-panel {
@@ -783,7 +783,7 @@ header {
 .input-row-warm #userInput::placeholder { color: rgba(94,42,3,0.3); }
 
 .send-btn-warm {
-  background: #5E2A03;
+  background: var(--accent);
   border: none;
   width: 32px;
   height: 32px;
@@ -793,12 +793,13 @@ header {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.15s, transform 0.1s;
+  transition: opacity 0.15s;
+  color: unset;
   align-self: center;
 }
-.send-btn-warm:hover { background: #FF8B33; }
+.send-btn-warm:hover { opacity: 0.85; }
 .send-btn-warm:active { transform: scale(0.93); }
-.send-btn-warm svg { transform: translateX(1px); }
+.send-btn-warm svg { transform: translateX(1px); fill: #fff; }
 
 /* ── Mode toggle (MC / VR pill) ── */
 .mode-toggle {
