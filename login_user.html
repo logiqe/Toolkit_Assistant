@@ -15,43 +15,46 @@
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: #0f0f0f;
+      background: #FFE3CE;
       font-family: 'DM Sans', sans-serif;
-      color: #fff;
+      color: #5E2A03;
     }
 
     .login-box {
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 12px;
+      background: #fff;
+      border: 1px solid rgba(94,42,3,0.15);
+      border-radius: 16px;
       padding: 2.5rem;
       width: 100%;
       max-width: 380px;
       display: flex;
       flex-direction: column;
       gap: 1rem;
+      box-shadow: 0 4px 24px rgba(94,42,3,0.08);
     }
 
     .login-box h1 {
       font-family: 'Space Mono', monospace;
-      font-size: 1.2rem;
-      margin: 0 0 0.5rem 0;
-      color: #fff;
+      font-size: 1.15rem;
+      margin: 0 0 0.25rem 0;
+      color: #5E2A03;
+      font-weight: 700;
     }
 
     .login-box p {
-      color: #888;
+      color: rgba(94,42,3,0.55);
       font-size: 0.9rem;
       margin: 0;
+      line-height: 1.5;
     }
 
     .login-box input {
       width: 100%;
       padding: 0.75rem 1rem;
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 8px;
-      color: #fff;
+      background: #FFE3CE;
+      border: 1px solid rgba(94,42,3,0.2);
+      border-radius: 10px;
+      color: #5E2A03;
       font-size: 1rem;
       font-family: 'DM Sans', sans-serif;
       box-sizing: border-box;
@@ -59,29 +62,40 @@
       transition: border-color 0.2s;
     }
 
+    .login-box input::placeholder {
+      color: rgba(94,42,3,0.35);
+    }
+
     .login-box input:focus {
-      border-color: #666;
+      border-color: #FF8B33;
     }
 
     .login-box button {
       width: 100%;
       padding: 0.75rem;
-      background: #fff;
-      color: #000;
+      background: #5E2A03;
+      color: #fff;
       border: none;
-      border-radius: 8px;
-      font-size: 1rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
       font-family: 'Space Mono', monospace;
+      font-weight: 700;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.1s;
+      letter-spacing: 0.02em;
     }
 
     .login-box button:hover {
-      background: #ddd;
+      background: #FF8B33;
+      color: #fff;
+    }
+
+    .login-box button:active {
+      transform: scale(0.98);
     }
 
     .error-msg {
-      color: #ff6b6b;
+      color: #c0392b;
       font-size: 0.85rem;
       display: none;
     }

@@ -13,10 +13,11 @@
             <span>Toolkit Assistant</span>
         </div>
         <div class="header-right">
-            <a id="world-btn" class="world-btn" href="#">
-                <span class="dot"></span>
-                World Builder
-            </a>
+            <div class="mode-toggle" id="mode-toggle">
+                <span class="mode-option active" id="mode-mc" title="Microcontroller mode">⬡ MC</span>
+                <div class="mode-sep"></div>
+                <a class="mode-option" id="mode-vr" href="#">⬡ VR</a>
+            </div>
             <button id="reset-btn" title="Restart">⟳</button>
         </div>
     </header>
@@ -45,12 +46,12 @@
             console.error("No board id detected");
         }
 
-        // ── World Builder button: link avec board_id ──
-        const worldBtn = document.getElementById('world-btn');
+        // ── Mode toggle: MC (active here) / VR → world page ──
+        const modeVr = document.getElementById('mode-vr');
         if (boardId) {
-            worldBtn.href = `/world?board_id=${boardId}`;
+            modeVr.href = `/world?board_id=${boardId}`;
         } else {
-            worldBtn.href = '/world';
+            modeVr.href = '/world';
         }
 
         async function sendMessage() {

@@ -1,6 +1,9 @@
+/* --- GOOGLE FONTS (Space Mono + DM Sans) --- */
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+
 /* --- GENERAL CONFIG --- */
 body { 
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background-color: #FFE3CE; 
   margin: 0; 
   padding: 0;
@@ -18,8 +21,9 @@ header {
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid rgba(0,0,0,0.05);
-  font-size: 1.1em;
-  font-weight: 600;
+  font-size: 1em;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
   color: #5E2A03;
 }
 
@@ -738,37 +742,55 @@ header {
   transition: opacity 0.1s;
 }  
 
-/* ── World Builder button ── */
-.world-btn {
-  background: none;
-  border: 1.5px solid #FF8B33;
-  color: #FF8B33;
-  padding: 5px 13px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  letter-spacing: 0.03em;
-  text-decoration: none;
+/* ── Mode toggle (Microcontroller ↔ VR) ── */
+.mode-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
+  background: rgba(94,42,3,0.08);
+  border: 1.5px solid rgba(94,42,3,0.2);
+  border-radius: 24px;
+  padding: 3px;
+  gap: 0;
+  text-decoration: none;
   white-space: nowrap;
+  flex-shrink: 0;
 }
-.world-btn:hover {
-  background: #FF8B33;
-  color: #fff;
+
+.mode-toggle .mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #5E2A03;
+  opacity: 0.45;
+  transition: all 0.2s;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
 }
-.world-btn .dot {
-  width: 6px; height: 6px;
-  background: currentColor;
-  border-radius: 50%;
-  animation: pulse-dot 2s infinite;
+
+.mode-toggle .mode-option.active {
+  background: #5E2A03;
+  color: #FFE3CE;
+  opacity: 1;
+  box-shadow: 0 1px 4px rgba(94,42,3,0.25);
 }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+
+.mode-toggle .mode-option:not(.active):hover {
+  opacity: 0.75;
+}
+
+.mode-toggle .mode-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(94,42,3,0.15);
+  flex-shrink: 0;
 }
 
 /* Ajustement header pour accueillir le bouton */

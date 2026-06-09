@@ -17,9 +17,16 @@
     <a id="back-btn" href="/" class="back-btn">← Back</a>
     <div class="header-title">TOOLKIT / <span>World Builder</span></div>
   </div>
-  <div class="ws-indicator">
-    <div class="ws-dot" id="ws-dot"></div>
-    <span id="ws-label">board not connected</span>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <div class="mode-toggle" id="mode-toggle" style="border-color:rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);">
+      <a class="mode-option" id="mode-mc" href="/" style="color:#f0ede8;">⬡ MC</a>
+      <div class="mode-sep" style="background:rgba(255,255,255,0.12);"></div>
+      <span class="mode-option active" id="mode-vr" style="background:#FF8B33;color:#1a0a00;">⬡ VR</span>
+    </div>
+    <div class="ws-indicator">
+      <div class="ws-dot" id="ws-dot"></div>
+      <span id="ws-label">board not connected</span>
+    </div>
   </div>
 </header>
 
@@ -77,6 +84,7 @@ const boardId = urlParams.get('board_id');
 
 if (boardId) {
   document.getElementById('back-btn').href = `/?board_id=${boardId}`;
+  document.getElementById('mode-mc').href = `/?board_id=${boardId}`;
 }
 
 // ── STATE ──
