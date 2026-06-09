@@ -783,7 +783,7 @@ header {
 .input-row-warm #userInput::placeholder { color: rgba(94,42,3,0.3); }
 
 .send-btn-warm {
-  background: var(--accent);
+  background: #FF8B33;
   border: none;
   width: 32px;
   height: 32px;
