@@ -2,6 +2,9 @@
 <html>
 <head>
     <title>Toolkit Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#FFE3CE">
@@ -10,27 +13,30 @@
 
     <header>
         <div class="header-left">
-            <span>Toolkit Assistant</span>
+            <span class="header-app-title">Toolkit Assistant</span>
         </div>
         <div class="header-right">
             <div class="mode-toggle" id="mode-toggle">
-                <span class="mode-option active" id="mode-mc" title="Microcontroller mode">⬡ MC</span>
-                <div class="mode-sep"></div>
-                <a class="mode-option" id="mode-vr" href="#">⬡ VR</a>
+                <span class="mode-option active" id="mode-mc">MC</span>
+                <span class="mode-sep"></span>
+                <span class="mode-option" id="mode-vr">VR</span>
             </div>
             <button id="reset-btn" title="Restart">⟳</button>
         </div>
     </header>
 
-    <div id="chatbox">
-        <!-- Les messages s'afficheront ici -->
+    <div class="chat-label-bar">
+        <span>Talk to your board</span>
+        <button id="reset-btn-2" class="clear-btn-warm">⟳ Reset</button>
     </div>
 
+    <div id="chatbox"></div>
+
     <div class="footer-area">
-        <div class="input-container">
-            <input type="text" id="userInput" placeholder="Message...">
-            <button class="send-btn" onclick="sendMessage()">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="white">
+        <div class="input-row-warm">
+            <input type="text" id="userInput" placeholder="Message..." autocomplete="off">
+            <button class="send-btn-warm" onclick="sendMessage()">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="#FFE3CE">
                     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
                 </svg>
             </button>
@@ -46,31 +52,27 @@
             console.error("No board id detected");
         }
 
-        // ── Mode toggle: MC (active here) / VR → world page ──
-        const modeVr = document.getElementById('mode-vr');
-        if (boardId) {
-            modeVr.href = `/world?board_id=${boardId}`;
-        } else {
-            modeVr.href = '/world';
-        }
+        // ── Mode toggle: MC actif ici, VR → world page ──
+        const modeVrEl = document.getElementById('mode-vr');
+        modeVrEl.style.cursor = 'pointer';
+        modeVrEl.addEventListener('click', () => {
+            window.location.href = boardId ? `/world?board_id=${boardId}` : '/world';
+        });
 
         async function sendMessage() {
             const inputField = document.getElementById("userInput");
-            const text = inputField.value;
+            const text = inputField.value.trim();
             if (!text || !boardId) return;
 
             const chatbox = document.getElementById("chatbox");
 
-            // 1. Afficher le message utilisateur
             chatbox.innerHTML += `
                 <div class="message-container user-container">
                     <div class="bubble user">${text}</div>
                 </div>`;
-            
             inputField.value = "";
             chatbox.scrollTop = chatbox.scrollHeight;
 
-            // 2. Afficher la bulle de chargement
             const loadingId = "loading-" + Date.now();
             chatbox.innerHTML += `
                 <div class="message-container ai-container" id="${loadingId}">
@@ -80,7 +82,6 @@
                 </div>`;
             chatbox.scrollTop = chatbox.scrollHeight;
 
-            // 3. Appel API
             try {
                 const response = await fetch(`/chat?board_id=${boardId}`, {
                     method: "POST",
@@ -89,33 +90,26 @@
                 });
                 const data = await response.json();
 
-                // 4. Supprimer la bulle et afficher la réponse
                 document.getElementById(loadingId).remove();
                 chatbox.innerHTML += `
                     <div class="message-container ai-container">
                         <div class="bubble ai">${data.reply || data.answer}</div>
                     </div>`;
-                
                 chatbox.scrollTop = chatbox.scrollHeight;
 
-                // 5. Vérifier si c'est une commande de calibration
                 const cmd = data.command || (data.MQTT_value && data.MQTT_value.command);
                 if (cmd && cmd.startsWith("calibrate_")) {
                     startCountdownUi();
                 }
-
             } catch (error) {
                 document.getElementById(loadingId).innerHTML = '<div class="bubble ai" style="background:#ffcccc">Erreur de connexion.</div>';
             }
-            
             chatbox.scrollTop = chatbox.scrollHeight;
-        };
+        }
 
-        // Fonction qui gère l'affichage du compte à rebours
         function startCountdownUi() {
             const chatbox = document.getElementById("chatbox");
             const timerId = "timer-" + Date.now();
-            
             chatbox.innerHTML += `
                 <div class="message-container ai-container">
                     <div class="countdown-box" id="${timerId}">
@@ -127,20 +121,16 @@
 
             const timerEl = document.getElementById(timerId);
             const titleEl = timerEl.querySelector('.countdown-title');
-            const timeEl = timerEl.querySelector('.countdown-time');
-
-            let timeLeft = 5;
-            let phase = "prep";
+            const timeEl  = timerEl.querySelector('.countdown-time');
+            let timeLeft = 5, phase = "prep";
 
             const interval = setInterval(() => {
                 timeLeft--;
-                
                 if (timeLeft > 0) {
                     timeEl.innerText = timeLeft;
                 } else {
                     if (phase === "prep") {
-                        phase = "calib";
-                        timeLeft = 25;
+                        phase = "calib"; timeLeft = 25;
                         titleEl.innerText = "Calibrating...";
                         timerEl.classList.add("recording");
                         timeEl.innerText = timeLeft;
@@ -161,7 +151,6 @@
 
         const chatbox = document.getElementById("chatbox");
 
-        // Fonction pour charger le message de bienvenue
         async function loadWelcome() {
             const response = await fetch("/welcome");
             const data = await response.json();
@@ -176,7 +165,6 @@
                 if (boardId) {
                     const response = await fetch(`/history?board_id=${boardId}`);
                     const data = await response.json();
-
                     if (data.history && data.history.length > 0) {
                         chatbox.innerHTML = "";
                         data.history.forEach(msg => {
@@ -201,8 +189,7 @@
 
         window.onload = initPage;
 
-        // Logique du bouton Restart
-        document.getElementById("reset-btn").addEventListener("click", async () => {
+        async function doReset() {
             if (confirm("Do you want to start a new conversation?")) {
                 const response = await fetch(`/reset?board_id=${boardId}`, { method: "POST" });
                 if (response.ok) {
@@ -210,7 +197,10 @@
                     await loadWelcome();
                 }
             }
-        });
+        }
+
+        document.getElementById("reset-btn").addEventListener("click", doReset);
+        document.getElementById("reset-btn-2").addEventListener("click", doReset);
     </script>
 </body>
 </html>

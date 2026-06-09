@@ -127,33 +127,13 @@ header {
   border-bottom-left-radius: 4px;
 }
 
-/* --- TEXT INPUT --- */
+/* --- TEXT INPUT (index) --- */
 .footer-area {
   background-color: #FFE3CE; 
-  padding: 15px clamp(12px, 5vw, 10%);
+  padding: 12px clamp(12px, 5vw, 10%) 10px;
 }
 
-.input-container {
-  background-color: white;
-  border-radius: 30px;
-  display: flex;
-  align-items: center;
-  padding: 5px 15px;
-  border: 1px solid #2c2c2c; 
-  gap: 8px;
-}
-
-#userInput {
-  flex-grow: 1;
-  border: none;
-  min-width: 0;
-  padding: 10px 5px;
-  outline: none;
-  font-size: 16px;
-  background: transparent;
-}
-
-/* Send button */
+/* Legacy send-btn kept for world.html compatibility */
 .send-btn {
   background-color: #5E2A03;
   color: white;
@@ -167,7 +147,6 @@ header {
   justify-content: center;
   padding: 0;
 }
-
 .send-btn svg {
   transform: translateX(1.2px) translateY(-0.5px); 
 }
@@ -742,55 +721,142 @@ header {
   transition: opacity 0.1s;
 }  
 
-/* ── Mode toggle (Microcontroller ↔ VR) ── */
+/* ── Header app title ── */
+.header-app-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.95em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #5E2A03;
+}
+
+/* ── Chat label bar (index) ── */
+.chat-label-bar {
+  padding: 10px clamp(12px, 5vw, 10%) 6px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: rgba(94,42,3,0.45);
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(94,42,3,0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clear-btn-warm {
+  background: none;
+  border: 1px solid rgba(94,42,3,0.15);
+  color: rgba(94,42,3,0.4);
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+}
+.clear-btn-warm:hover { border-color: #FF8B33; color: #FF8B33; }
+
+/* ── Input row (index, aligned with world) ── */
+.input-row-warm {
+  display: flex;
+  gap: 8px;
+  background: white;
+  border: 1px solid rgba(94,42,3,0.2);
+  border-radius: 10px;
+  padding: 6px 8px 6px 14px;
+  transition: border-color 0.2s;
+}
+.input-row-warm:focus-within { border-color: #FF8B33; }
+
+.input-row-warm #userInput {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  color: #5E2A03;
+  min-width: 0;
+  padding: 6px 0;
+}
+.input-row-warm #userInput::placeholder { color: rgba(94,42,3,0.3); }
+
+.send-btn-warm {
+  background: #5E2A03;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, transform 0.1s;
+  align-self: center;
+}
+.send-btn-warm:hover { background: #FF8B33; }
+.send-btn-warm:active { transform: scale(0.93); }
+.send-btn-warm svg { transform: translateX(1px); }
+
+/* ── Mode toggle (MC / VR pill) ── */
 .mode-toggle {
   display: flex;
   align-items: center;
-  background: rgba(94,42,3,0.08);
-  border: 1.5px solid rgba(94,42,3,0.2);
+  background: rgba(94,42,3,0.07);
+  border: 1.5px solid rgba(94,42,3,0.18);
   border-radius: 24px;
   padding: 3px;
-  gap: 0;
-  text-decoration: none;
-  white-space: nowrap;
   flex-shrink: 0;
 }
 
 .mode-toggle .mode-option {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
+  padding: 4px 13px;
   border-radius: 20px;
   font-family: 'Space Mono', monospace;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: #5E2A03;
-  opacity: 0.45;
+  opacity: 0.4;
   transition: all 0.2s;
-  cursor: pointer;
-  text-decoration: none;
-  white-space: nowrap;
   user-select: none;
+  white-space: nowrap;
 }
-
 .mode-toggle .mode-option.active {
   background: #5E2A03;
   color: #FFE3CE;
   opacity: 1;
-  box-shadow: 0 1px 4px rgba(94,42,3,0.25);
+  box-shadow: 0 1px 4px rgba(94,42,3,0.2);
 }
-
-.mode-toggle .mode-option:not(.active):hover {
-  opacity: 0.75;
-}
+.mode-toggle .mode-option:not(.active):hover { opacity: 0.7; }
 
 .mode-toggle .mode-sep {
   width: 1px;
-  height: 14px;
-  background: rgba(94,42,3,0.15);
+  height: 12px;
+  background: rgba(94,42,3,0.18);
   flex-shrink: 0;
+}
+
+/* World page overrides for the toggle */
+.world-mode-toggle {
+  background: rgba(255,255,255,0.05) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+.world-mode-toggle .mode-option {
+  color: #f0ede8 !important;
+}
+.world-mode-toggle .mode-option.active {
+  background: #FF8B33 !important;
+  color: #1a0a00 !important;
+  box-shadow: 0 1px 6px rgba(255,139,51,0.3) !important;
+}
+.world-mode-toggle .mode-sep {
+  background: rgba(255,255,255,0.1) !important;
 }
 
 /* Ajustement header pour accueillir le bouton */
