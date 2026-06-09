@@ -117,7 +117,7 @@ header {
   border: none;
   width: 35px;
   height: 35px;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -525,7 +525,7 @@ header {
   background: var(--accent);
   border: none;
   width: 32px; height: 32px;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
@@ -787,7 +787,7 @@ header {
   border: none;
   width: 32px;
   height: 32px;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
