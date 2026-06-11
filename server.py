@@ -660,7 +660,8 @@ async def get_scene(board_id: str, vr: str = "0"):
             "<!DOCTYPE html><html><body style='background:#111;color:#fff;"
             "font-family:sans-serif;display:flex;align-items:center;"
             "justify-content:center;height:100vh'>"
-            "<p>No scene generated yet. Go back and describe your world.</p>"
+            "<div>🌐</div>"
+            "<p>Your world will appear here.<br>Start by describing it on the left.</p>"
             "</body></html>",
             status_code=404
         )
