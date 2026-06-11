@@ -625,6 +625,20 @@ def _inject_sensor_bridge(html: str, standalone: bool = False) -> str:
   }} else {{
     send('warn', 'navigator.xr absent (HTTPS requis ? contexte non sécurisé ?)');
   }}
+  // Intercepter requestSession pour voir ce qui se passe
+  if (navigator.xr && navigator.xr.requestSession) {{
+    var origRS = navigator.xr.requestSession.bind(navigator.xr);
+    navigator.xr.requestSession = function(mode, opts) {{
+      send('info', 'requestSession called: ' + mode + ' opts=' + JSON.stringify(opts || {{}}));
+      return origRS(mode, opts).then(function(s) {{
+        send('info', '✅ XR session STARTED');
+        return s;
+      }}).catch(function(e) {{
+        send('error', '❌ requestSession REJECTED: ' + (e.name || '') + ' — ' + (e.message || e));
+        throw e;
+      }});
+    }};
+  }}
 }})();
 
 // ── Toolkit Sensor & Passthrough Bridge ──

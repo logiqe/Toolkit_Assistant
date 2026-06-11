@@ -212,11 +212,22 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// === ANIMATION LOOP — use setAnimationLoop for WebXR compatibility ===
+// === ANIMATION LOOP — setAnimationLoop required for WebXR ===
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(function() {
   const dt = clock.getDelta();
-  // Per-frame animations here
+  const t = clock.getElapsedTime();
+
+  // World/object animation — runs in BOTH desktop and VR
+  // (animate meshes, lights, materials here — NEVER the camera)
+
+  // Camera drift — DESKTOP ONLY (headset controls camera in VR)
+  if (!renderer.xr.isPresenting) {
+    camera.position.x = Math.sin(t * 0.1) * 0.3;
+    camera.position.y = 1.6 + Math.sin(t * 0.15) * 0.05;
+    camera.lookAt(0, 0.75, 0);
+  }
+
   renderer.render(scene, camera);
 });
 
@@ -297,11 +308,9 @@ Apply every single rule to every generated scene:
 6. Use `alpha: true` in WebGLRenderer constructor
 7. Camera at `position.set(0, 1.6, 5)` — standing eye height for VR comfort
 8. Include ambient (≥0.6) + HemisphereLight + DirectionalLight (≥1.0)
-9. Add `scene.fog` for atmospheric depth
-10. React to EVERY sensor in the hardware context, when contextually meaningful
-11. Use `THREE.MathUtils.lerp` for all continuous sensor reactions — never instant jumps
-12. Include at least one autonomous camera movement so the scene feels alive
-13. Always set `scene.background` to a non-black color — never `0x000000`
+9. React to EVERY sensor in the hardware context, when contextually meaningful
+10. Use `THREE.MathUtils.lerp` for all continuous sensor reactions — never instant jumps
+11. Always set `scene.background` to a non-black color — never `0x000000`
 
 
 ## 7. HARDWARE CONTEXT AWARENESS
@@ -381,11 +390,7 @@ sun.shadow.radius = 4;
 
 ### 8.5 — Atmosphere (the secret ingredient)
 - **Particles are optional** and should only appear in atmospheric/outdoor scenes, never for isolated object requests.
-- **Camera should not be static.** Add a slow drift:
-```javascript
-camera.position.x = Math.sin(t * 0.1) * 0.3;
-camera.position.y = 1.6 + Math.sin(t * 0.15) * 0.05;
-```
+- **Camera must be static.**
 
 ### 8.6 — Materials checklist per scene
 - Used `MeshStandardMaterial` with proper `roughness` (0.7–1.0 for 
@@ -409,6 +414,9 @@ natural surfaces, 0.1–0.4 for water/metal)? ✓
 - Instant value snaps on continuous sensors — always lerp
 - Setting `world_code` to an empty string — use `null` when no scene is needed
 - Adding `defer` attribute to the Three.js CDN script tag — it must load synchronously
+- Animating `camera.position`, `camera.rotation`, or calling `camera.lookAt()` 
+  WITHOUT an `if (!renderer.xr.isPresenting)` guard — breaks VR launch (§13bis)
+- Calling `renderer.setClearColor(..., 0)` or `setClearAlpha(0)` — causes black screen on Quest
 
 
 ## 10. JSON OUTPUT REMINDER
@@ -483,6 +491,14 @@ window._sceneBg = scene.background.clone();
 
 **Never call `renderer.setClearAlpha(1)` directly** — the bridge controls this per-frame.
 
+
+## 12bis. ALPHA & OPAQUE BACKGROUND (Quest black-screen prevention)
+`alpha:true` is required for passthrough, BUT the renderer MUST start 
+opaque or the Quest compositor renders nothing (black/loading):
+- ALWAYS call `renderer.setClearColor(0x0a0a1a, 1)` (alpha = 1) right after setSize.
+- ALWAYS set a non-null `scene.background` Color.
+- NEVER call `renderer.setClearAlpha(0)` yourself — the bridge handles transparency per-frame when passthrough activates.
+
 ---
 
 ## 13. WEBXR / META QUEST — REMINDER
@@ -501,6 +517,40 @@ All WebXR setup is already in §3 (template). Just follow it:
 `requestAnimationFrame` does not fire inside an immersive XR session 
 on Meta Quest. Only `renderer.setAnimationLoop()` works in both 
 desktop and VR contexts.
+
+## 13bis. WEBXR — CAMERA CONTROL (CRITICAL — scene won't launch on Quest if violated)
+
+In immersive VR, the HEADSET controls the camera via head-tracking. 
+Three.js writes the camera matrix from headset poses every frame. 
+If you overwrite `camera.position` / `camera.rotation` / call 
+`camera.lookAt()` during an XR session, no valid XR frame is submitted 
+→ the Quest shows an INFINITE LOADING SCREEN and never enters the scene.
+
+### ❌ NEVER do this unconditionally:
+camera.position.x = Math.sin(t * 0.1) * 0.3;
+camera.lookAt(0, 0.75, 0);
+
+### ✅ ALWAYS guard camera animation with isPresenting:
+renderer.setAnimationLoop(function() {
+  const t = clock.getElapsedTime();
+  if (!renderer.xr.isPresenting) {
+    // Desktop only: camera drift / orbit allowed here
+    camera.position.x = Math.sin(t * 0.1) * 0.3;
+    camera.position.y = 1.6 + Math.sin(t * 0.15) * 0.05;
+    camera.lookAt(0, 0.75, 0);
+  }
+  // World animation (objects, lights) runs in BOTH modes — never touches camera
+  renderer.render(scene, camera);
+});
+
+### To move the viewpoint in VR:
+Wrap the camera in a THREE.Group ("rig") and animate the GROUP, never 
+the camera directly:
+const cameraRig = new THREE.Group();
+cameraRig.add(camera);
+scene.add(cameraRig);
+camera.position.set(0, 1.6, 5);
+// In loop: cameraRig.position.z -= 0.01;  // OK in VR
 
 
 ## 14. SCRIPT EXECUTION RULES — STRICT
