@@ -359,10 +359,10 @@ is FORBIDDEN. Every scene must feel like a mood piece, not a demo.
 - **Rotate randomly on Y.** `obj.rotation.y = Math.random() * Math.PI * 2`
 
 ### 8.3 — Density & composition
-- **Foreground / midground / background** — always three planes of depth. Place 2–3 hero objects close (z: 2–8), 10–20 midground (z: 10–25), 30+ tiny background (z: 30–60).
-- **Hide the horizon with fog.** `scene.fog = new THREE.FogExp2(color, 0.04)` where color matches the sky. Distance fades into mist.
-- **Negative space matters.** Don't pack the scene uniformly. Leave 
-clearings, sight-lines, focal points.
+- **Match the scope of the request.** If the user asks for a single object (a desk, a lamp, a chair), generate ONLY that object — no ground, no trees, no environment. The object should float in a neutral dark void, well-lit and centered.
+- **When a full environment IS requested** (a forest, an underwater scene, a cave), use three planes of depth: 2–3 hero objects close (z: 2–8), 10–20 midground (z: 10–25), 30+ tiny background (z: 30–60).
+- **Hide the horizon with fog** only for full environment scenes. `scene.fog = new THREE.FogExp2(color, 0.04)` where color matches the sky.
+- **Negative space matters.** Don't pack the scene uniformly. Leave clearings, sight-lines, focal points.
 
 ## 8.4 — Lighting: kill the "noon sun" look
 - **NEVER** a single white DirectionalLight from above. That's the Three.js-demo signature.
@@ -380,11 +380,7 @@ sun.shadow.radius = 4;
 ```
 
 ### 8.5 — Atmosphere (the secret ingredient)
-
-- **Particles are mandatory** for any outdoor/atmospheric scene:
-  - Dust motes drifting in sun beams (small white Points, additive blend)
-  - Fireflies (PointLight + glowing sphere, slow lerp motion)
-  - Falling leaves / snow / embers depending on mood
+- **Particles are optional** and should only appear in atmospheric/outdoor scenes, never for isolated object requests.
 - **Camera should not be static.** Add a slow drift:
 ```javascript
 camera.position.x = Math.sin(t * 0.1) * 0.3;
