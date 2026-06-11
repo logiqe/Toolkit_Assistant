@@ -593,6 +593,40 @@ def _inject_sensor_bridge(html: str, standalone: bool = False) -> str:
 
     bridge = f"""
 <script>
+// ── Scene log bridge → remonte les logs vers le parent (world.html) ──
+(function() {{
+  function send(level, text) {{
+    try {{ parent.postMessage({{ type: 'scene-log', level: level, text: String(text) }}, '*'); }}
+    catch (e) {{}}
+  }}
+  // Erreurs JS non catchées
+  window.addEventListener('error', function(ev) {{
+    send('error', (ev.message || 'error') +
+      (ev.filename ? ' @ ' + ev.filename + ':' + ev.lineno : ''));
+  }});
+  // Promesses rejetées (loaders GLTF, WebXR async, etc.)
+  window.addEventListener('unhandledrejection', function(ev) {{
+    send('error', 'Unhandled promise: ' + (ev.reason && ev.reason.message || ev.reason));
+  }});
+  // Rediriger console.* vers le parent
+  ['log','warn','error'].forEach(function(fn) {{
+    var orig = console[fn];
+    console[fn] = function() {{
+      send(fn === 'log' ? 'info' : fn, Array.from(arguments).join(' '));
+      orig.apply(console, arguments);
+    }};
+  }});
+  // Spécifique WebXR — la cause #1 d'échec sur Quest
+  send('info', 'scene bridge loaded. secureContext=' + window.isSecureContext);
+  if (navigator.xr) {{
+    navigator.xr.isSessionSupported('immersive-vr')
+      .then(function(ok){{ send('info', 'immersive-vr supported: ' + ok); }})
+      .catch(function(e){{ send('error', 'xr check failed: ' + e); }});
+  }} else {{
+    send('warn', 'navigator.xr absent (HTTPS requis ? contexte non sécurisé ?)');
+  }}
+}})();
+
 // ── Toolkit Sensor & Passthrough Bridge ──
 window.sensorData = {{}};
 window._passthroughActive = false;
@@ -627,6 +661,7 @@ window.addEventListener('message', function(e) {{
 {ws_client}
 </script>
 """
+    
     if '</body>' in html:
         return html.replace('</body>', bridge + '</body>', 1)
     return html + bridge

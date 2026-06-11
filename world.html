@@ -73,6 +73,14 @@
       allowfullscreen
       allowvr="yes">
     </iframe>
+
+    <div id="logPanel" class="log-panel">
+      <div class="log-header">
+        <span>LOGS</span>
+        <button id="logClear">clear</button>
+      </div>
+      <div id="logBody" class="log-body"></div>
+    </div>
     <div class="sensor-overlay" id="sensorOverlay"></div>
   </div>
 </div>
@@ -538,6 +546,26 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
     showWelcome();
   }
 })();
+
+function pushLog(level, text) {
+  const body = document.getElementById('logBody');
+  const line = document.createElement('div');
+  line.className = `log-line ${level}`;
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `[${t}] ${text}`;
+  body.appendChild(line);
+  body.scrollTop = body.scrollHeight;
+}
+document.getElementById('logClear').addEventListener('click',
+  () => document.getElementById('logBody').innerHTML = '');
+
+// Recevoir les logs remontés depuis l'iframe (la scène)
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'scene-log') {
+    pushLog(e.data.level || 'info', e.data.text);
+  }
+});
+
 </script>
 
 </body>

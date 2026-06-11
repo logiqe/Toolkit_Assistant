@@ -886,3 +886,13 @@ header {
   color: inherit;
   text-decoration: underline;
 }
+
+.log-panel{font-family:'Space Mono',monospace;font-size:11px;background:#0a0a0a;
+  border-top:1px solid rgba(255,255,255,0.1);max-height:180px;display:flex;flex-direction:column}
+.log-header{display:flex;justify-content:space-between;padding:6px 10px;
+  color:rgba(255,255,255,0.4);border-bottom:1px solid rgba(255,255,255,0.08)}
+.log-body{overflow-y:auto;padding:6px 10px}
+.log-line{padding:2px 0;white-space:pre-wrap;word-break:break-word;line-height:1.4}
+.log-line.error{color:#ff6b6b}
+.log-line.warn{color:#ffcc66}
+.log-line.info{color:rgba(255,255,255,0.6)}
