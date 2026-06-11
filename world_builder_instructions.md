@@ -83,15 +83,18 @@ THREE.VRButton = {
       let currentSession = null;
       async function onSessionStarted(session) {
         session.addEventListener('end', onSessionEnded);
+        currentSession = session;                    // ← AVANT le await
         await renderer.xr.setSession(session);
         button.textContent = 'EXIT VR';
-        currentSession = session;
       }
       function onSessionEnded() {
-        currentSession.removeEventListener('end', onSessionEnded);
+        if (currentSession) {                         // ← garde de sécurité
+          currentSession.removeEventListener('end', onSessionEnded);
+        }
         button.textContent = 'ENTER VR';
         currentSession = null;
       }
+
       button.style.display = '';
       button.style.cursor = 'pointer';
       button.style.left = 'calc(50% - 50px)';
@@ -192,7 +195,7 @@ scene.add(ambient);
 const hemi = new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-sun.position.set(5, 10, 5);
+sun.position.set(5, 3, 5);
 sun.castShadow = true;
 scene.add(sun);
 
@@ -373,7 +376,7 @@ is FORBIDDEN. Every scene must feel like a mood piece, not a demo.
 - **Hide the horizon with fog** only for full environment scenes. `scene.fog = new THREE.FogExp2(color, 0.04)` where color matches the sky.
 - **Negative space matters.** Don't pack the scene uniformly. Leave clearings, sight-lines, focal points.
 
-## 8.4 — Lighting: kill the "noon sun" look
+### 8.4 — Lighting: kill the "noon sun" look
 - **NEVER** a single white DirectionalLight from above. That's the Three.js-demo signature.
 - **Three-layer lighting:**
   1. AmbientLight: 0.3–0.5 intensity, tinted toward sky color
