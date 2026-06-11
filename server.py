@@ -657,11 +657,13 @@ async def get_scene(board_id: str, vr: str = "0"):
 
     if not raw_html:
         return HTMLResponse(
-            "<!DOCTYPE html><html><body style='background:#111;color:#fff;"
-            "font-family:sans-serif;display:flex;align-items:center;"
-            "justify-content:center;height:100vh'>"
-            "<div>🌐</div>"
-            "<p>Your world will appear here.<br>Start by describing it on the left.</p>"
+            "<!DOCTYPE html><html><head><meta charset='UTF-8'></head>"
+            "<body style='background:#0f0f0f;margin:0;display:flex;align-items:center;"
+            "justify-content:center;height:100vh;flex-direction:column;gap:16px;'>"
+            "<div style='font-size:48px'>🌐</div>"
+            "<p style='font-family:Space Mono,monospace;font-size:13px;color:rgba(255,255,255,0.4);"
+            "text-align:center;line-height:1.6'>Your world will appear here.<br>"
+            "Start by describing it on the left.</p>"
             "</body></html>",
             status_code=404
         )
