@@ -612,19 +612,16 @@ window.addEventListener('message', function(e) {{
   }}
 }});
 
-// Maintain passthrough every frame via setAnimationLoop patch
+// Maintain passthrough every frame — poll in rAF, don't patch setAnimationLoop
 (function() {{
-  const _origSet = THREE && THREE.WebGLRenderer && THREE.WebGLRenderer.prototype.setAnimationLoop;
-  if (!_origSet) return;
-  THREE.WebGLRenderer.prototype.setAnimationLoop = function(cb) {{
-    _origSet.call(this, cb ? function(t, frame) {{
-      if (window._passthroughActive) {{
-        this.setClearColor(0x000000, 0);
-        if (window._scene) window._scene.background = null;
-      }}
-      cb(t, frame);
-    }}.bind(this) : null);
-  }};
+  function passthroughTick() {{
+    if (window._passthroughActive && window._renderer) {{
+      window._renderer.setClearColor(0x000000, 0);
+      if (window._scene) window._scene.background = null;
+    }}
+    requestAnimationFrame(passthroughTick);
+  }}
+  requestAnimationFrame(passthroughTick);
 }})();
 
 {ws_client}
