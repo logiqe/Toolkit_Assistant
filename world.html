@@ -74,7 +74,6 @@
       allowvr="yes">
     </iframe>
     <div class="sensor-overlay" id="sensorOverlay"></div>
-  </div>
 </div>
 
 <script>
@@ -433,7 +432,7 @@ document.getElementById('vrBtn').addEventListener('click', () => {
   // Open in new tab — WebXR requires top-level browsing context on Meta Quest
   // Pass board_id so the standalone scene can connect WebSocket for live sensors
   const vrUrl = currentSceneUrl + '?vr=1&board_id=' + (boardId || 'none');
-  window.open(vrUrl, '_blank');
+  window.location.href = vrUrl;
 });
 
 document.getElementById('fullscreenBtn').addEventListener('click', () => {
