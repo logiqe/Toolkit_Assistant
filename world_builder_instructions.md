@@ -50,7 +50,7 @@ For world_code: escape all backticks as \` and all backslashes as \\ inside the 
 ## 3. SCENE BASE TEMPLATE
 
 ## CRITICAL RENDERING RULES (apply before anything else)
-
+0. **The renderer MUST start fully opaque.** `alpha: true` is allowed ONLY because the passthrough bridge needs it, but you MUST call `renderer.setClearColor(0x0a0a14, 1)` immediately after setSize, AND set a non-null scene.background. Never rely on alpha for the base render.
 1. **WebGLRenderer MUST use `alpha: true`** (already in §12)
 2. **NEVER set `scene.background` to pure black** `0x000000` — use at minimum `0x0a0a14` or a gradient
 3. **After `renderer.setSize(...)`, always call `renderer.setClearColor(0x0a0a14, 1)`**
@@ -83,10 +83,16 @@ THREE.VRButton = {
       let currentSession = null;
       async function onSessionStarted(session) {
         session.addEventListener('end', onSessionEnded);
-        currentSession = session;                    // ← AVANT le await
-        await renderer.xr.setSession(session);
-        button.textContent = 'EXIT VR';
+        try {
+          await renderer.xr.setSession(session);
+          currentSession = session;
+          button.textContent = 'EXIT VR';
+        } catch (err) {
+          console.error('setSession failed:', err);
+          session.end();
+        }
       }
+
       function onSessionEnded() {
         if (currentSession) {                         // ← garde de sécurité
           currentSession.removeEventListener('end', onSessionEnded);
@@ -104,10 +110,12 @@ THREE.VRButton = {
       button.onmouseleave = () => button.style.opacity = '0.5';
       button.onclick = function() {
         if (currentSession === null) {
-          const sessionInit = { 
-            optionalFeatures: ['local-floor','bounded-floor','hand-tracking','layers'] 
+          const sessionInit = {
+            optionalFeatures: ['local-floor','bounded-floor','hand-tracking','layers']
           };
-          navigator.xr.requestSession('immersive-vr', sessionInit).then(onSessionStarted);
+          navigator.xr.requestSession('immersive-vr', sessionInit)
+            .then(onSessionStarted)
+            .catch(function(err) { console.error('requestSession failed:', err); });
         } else {
           currentSession.end();
         }
@@ -183,6 +191,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x0a0a1a, 1);
 renderer.shadowMap.enabled = true;
 renderer.xr.enabled = true;  // ← REQUIRED for Meta Quest VR/AR
+renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 window._renderer = renderer;
 
@@ -530,10 +539,13 @@ If you overwrite `camera.position` / `camera.rotation` / call
 → the Quest shows an INFINITE LOADING SCREEN and never enters the scene.
 
 ### ❌ NEVER do this unconditionally:
+```javascript
 camera.position.x = Math.sin(t * 0.1) * 0.3;
 camera.lookAt(0, 0.75, 0);
+```
 
 ### ✅ ALWAYS guard camera animation with isPresenting:
+```javascript
 renderer.setAnimationLoop(function() {
   const t = clock.getElapsedTime();
   if (!renderer.xr.isPresenting) {
@@ -545,15 +557,29 @@ renderer.setAnimationLoop(function() {
   // World animation (objects, lights) runs in BOTH modes — never touches camera
   renderer.render(scene, camera);
 });
+```
 
 ### To move the viewpoint in VR:
 Wrap the camera in a THREE.Group ("rig") and animate the GROUP, never 
 the camera directly:
+```javascript
 const cameraRig = new THREE.Group();
 cameraRig.add(camera);
 scene.add(cameraRig);
 camera.position.set(0, 1.6, 5);
 // In loop: cameraRig.position.z -= 0.01;  // OK in VR
+```
+
+## 13ter. WEBXR — SILENT FAILURE CHECKLIST (infinite loading prevention)
+
+These pass every other rule but STILL cause infinite loading on Quest.
+Verify ALL of them in every generated scene:
+1. **setSession MUST be wrapped in try/catch** and requestSession MUST have a .catch — a rejected promise leaves the headset in a loading state with no error shown. (See VRButton in §3.)
+2. **Set the reference space explicitly:** `renderer.xr.setReferenceSpaceType('local-floor');` immediately after `renderer.xr.enabled = true;`. Missing this is the #1 cause of infinite loading when everything else is correct.
+3. **The renderer must start opaque** (clearColor alpha = 1, non-null scene.background). A transparent base framebuffer makes the Quest compositor render nothing.
+4. **No camera writes during isPresenting** (already in §13bis).
+5. **No heavy synchronous work at top level** (e.g. building 50k+ vertices in a blocking loop) — it can delay the first XR frame past the runtime's timeout. Keep top-level init light.
+6. **Never await anything between requestSession and setSession** other than setSession itself.
 
 
 ## 14. SCRIPT EXECUTION RULES — STRICT
