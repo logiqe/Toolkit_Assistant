@@ -50,7 +50,8 @@ ws_connections: dict[str, list[WebSocket]] = {}
 # ── World conversation histories: board_id → list of messages ──
 world_histories: dict[str, list[dict]] = {}
 # Stores the latest generated HTML scene per board_id — served via /scene/<board_id>
-world_scenes: dict[str, str] = {}
+world_scenes: dict[str, str] = {}     # HTML with bridge injected (for serving)
+world_scenes_raw: dict[str, str] = {}  # HTML without bridge (for LLM context)
 
 # --- Render API config ---
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
@@ -426,10 +427,12 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
     # Generate response in a thread to avoid blocking
     result = await asyncio.to_thread(generate_world, world_histories[board_id], hardware_context)
 
-    # Add assistant response to history
+    # Add assistant response to history — store summary ONLY, never the full HTML
+    # (storing world_code in history multiplies input tokens with every turn)
     world_histories[board_id].append({
         "role": "assistant",
-        "content": json.dumps(result)
+        "content": result.get("reply", "Scene generated.")
+        + (" [scene updated]" if result.get("world_code") else "")
     })
     save_world_states()
 
@@ -440,6 +443,7 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
     # Store latest scene for /scene/<board_id> — served as a real URL (no srcdoc)
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
+        world_scenes_raw[board_id] = result["world_code"]
 
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 
@@ -523,7 +527,7 @@ async def world_chat_with_files(
     hardware_context = build_hardware_context(board_id)
     result = await asyncio.to_thread(generate_world, world_histories[board_id], hardware_context)
 
-    world_histories[board_id].append({"role": "assistant", "content": json.dumps(result)})
+    world_histories[board_id].append({"role": "assistant", "content": result.get("reply", "Scene generated.") + (" [scene updated]" if result.get("world_code") else "")})
     save_world_states()
 
     if len(world_histories[board_id]) > 40:
@@ -531,6 +535,7 @@ async def world_chat_with_files(
 
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
+        world_scenes_raw[board_id] = result["world_code"]
 
     print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
     return {
@@ -657,6 +662,23 @@ async def get_scene(board_id: str, vr: str = "0"):
 
 
 
+def _get_raw_world_code(board_id: str) -> str | None:
+    """Return the raw world HTML (without bridge) for LLM context. Capped at 6000 chars."""
+    raw = world_scenes_raw.get(board_id)
+    if raw:
+        return raw[:6000]
+    # Fallback: try to reconstruct from history
+    for msg in reversed(world_histories.get(board_id, [])):
+        if msg.get("role") == "assistant":
+            try:
+                data = json.loads(msg["content"])
+                if isinstance(data, dict) and data.get("world_code"):
+                    return data["world_code"][:6000]
+            except Exception:
+                pass
+    return None
+
+
 def build_hardware_context(board_id: str) -> dict:
     session = sessions.get(board_id)
     if not session:
@@ -692,12 +714,21 @@ def build_hardware_context(board_id: str) -> dict:
                 "pin": info.get("pin", "?")
             })
 
+    # Get raw world code (without bridge injection) for context
+    # We store raw HTML in world_scenes; strip bridge if needed
+    raw_scene = None
+    for msg in reversed(world_histories.get(board_id, [])):
+        # world_histories now only stores text summaries — get raw HTML from world_scenes
+        break
+    raw_scene = None  # raw HTML available via world_scenes[board_id] if needed
+
     return {
         "configured_inputs": inputs,
         "configured_outputs": outputs,
         "last_sensor_value": session.get("last_sensor"),
         "calibrated_sensors": session.get("calibrated_sensors", {}),
-        "chat_history": history_text
+        "chat_history": history_text,
+        "last_world_code": _get_raw_world_code(board_id)
     }
 
 # ──────────────────────────────────────────────────────────────────────────────

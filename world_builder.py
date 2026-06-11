@@ -174,6 +174,15 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
                     f"\n\n## HARDWARE CONFIGURED IN MAIN CHAT\n"
                     f"The user already set up their hardware. Context:\n{hardware_context['chat_history']}"
                 )
+            # Inject latest scene code as context — keeps conversation history lean
+            if hardware_context.get("last_world_code"):
+                system_prompt += (
+                    "\n\n## CURRENT SCENE (your last generated world_code)\n"
+                    "When the user asks to modify or add to the scene, use this as your base.\n"
+                    "```html\n"
+                    + hardware_context["last_world_code"][:6000]  # cap to avoid excess tokens
+                    + "\n```"
+                )
 
         # Deep copy — never mutate caller's history
         messages_copy = copy.deepcopy(conversation_history)
