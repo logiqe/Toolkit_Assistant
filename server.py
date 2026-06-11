@@ -118,6 +118,18 @@ def load_world_states():
     if os.path.exists(WORLD_STATE_FILE):
         with open(WORLD_STATE_FILE, "r") as f:
             world_histories = json.load(f)
+    # Reconstruit world_scenes depuis l'historique
+    for board_id, history in world_histories.items():
+        for msg in reversed(history):
+            if msg["role"] == "assistant":
+                try:
+                    data = json.loads(msg["content"])
+                    if data.get("world_code"):
+                        world_scenes[board_id] = _inject_sensor_bridge(data["world_code"])
+                        world_scenes_raw[board_id] = data["world_code"]
+                        break
+                except:
+                    pass
 
 # Au démarrage du serveur
 load_world_states()

@@ -522,25 +522,16 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
     
     // Restore world — prefer /scene/<board_id> URL
     if (data.world_code) {
-      // world_code present: scene is available at /scene/<board_id>
       currentSceneUrl = `/scene/${boardId || 'none'}`;
       injectWorld(data.world_code);
     } else {
-      // Fallback: try saved scene URL from localStorage
+      // Fallback: localStorage scene URL only (never srcdoc — breaks WebXR on Quest)
       const savedUrl = localStorage.getItem('scene_url_latest');
       if (savedUrl) {
         currentSceneUrl = savedUrl;
         injectWorld('');
-      } else {
-        const saved = localStorage.getItem(WORLD_CODE_KEY);
-        if (saved) {
-          worldCode = saved;
-          const frame = document.getElementById('world-frame');
-          frame.srcdoc = saved;
-          frame.style.display = 'block';
-          document.getElementById('emptyState').style.display = 'none';
-        }
       }
+      // ← srcdoc fallback supprimé intentionnellement
     }
   } catch(e) {
     showWelcome();
