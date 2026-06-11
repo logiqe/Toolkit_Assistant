@@ -111,7 +111,7 @@ THREE.VRButton = {
       button.onclick = function() {
         if (currentSession === null) {
           const sessionInit = {
-            optionalFeatures: ['local-floor','bounded-floor','hand-tracking','layers']
+            optionalFeatures: ['local-floor','bounded-floor','hand-tracking']
           };
           navigator.xr.requestSession('immersive-vr', sessionInit)
             .then(onSessionStarted)
@@ -580,6 +580,7 @@ Verify ALL of them in every generated scene:
 4. **No camera writes during isPresenting** (already in §13bis).
 5. **No heavy synchronous work at top level** (e.g. building 50k+ vertices in a blocking loop) — it can delay the first XR frame past the runtime's timeout. Keep top-level init light.
 6. **Never await anything between requestSession and setSession** other than setSession itself.
+7. **NEVER request the 'layers' feature.** Three.js r128 uses the baseLayer API (updateRenderState({ baseLayer })). The 'layers' feature forbids baseLayer per the WebXR spec, causing: `"InvalidStateError: Can't use baseLayer with layers feature requested"` → setSession rejects → infinite loading on Quest. Allowed features only: 'local-floor', 'bounded-floor', 'hand-tracking'.
 
 
 ## 14. SCRIPT EXECUTION RULES — STRICT
