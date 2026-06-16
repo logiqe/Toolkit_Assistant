@@ -158,13 +158,35 @@ camera.position.set(0, 1.6, 5);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setClearColor(0x0a0a1a, 1);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
 renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 window._renderer = renderer;
+
+// === ENVIRONMENT MAP (procedural — enables reflections on metal/glossy materials) ===
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene();
+const envGrad = new THREE.Mesh(
+  new THREE.SphereGeometry(50, 32, 32),
+  new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x888899 })
+);
+envScene.add(envGrad);
+const envLight = new THREE.Mesh(
+  new THREE.SphereGeometry(5, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffffff })
+);
+envLight.position.set(0, 20, 0);
+envScene.add(envLight);
+const envMap = pmrem.fromScene(envScene, 0.04).texture;
+scene.environment = envMap;
+pmrem.dispose();
 
 renderer.xr.addEventListener('sessionstart', () => {
   renderer.setClearColor(0x000000, 0);
@@ -243,6 +265,11 @@ renderer.setAnimationLoop(function() {
 11. **Script tag always at end of `<body>`, after Three.js.** Never use `DOMContentLoaded` or `window.onload` wrappers — they never fire in this context.
 12. **Never use backslashes in JavaScript strings** — only valid escapes: `\n \t \r \\ \' \" \0`.
 13. **Expose globals:** `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough bridge.
+14. **Always set the colour pipeline** in the renderer: `outputEncoding = THREE.sRGBEncoding`, `toneMapping = THREE.ACESFilmicToneMapping`, `toneMappingExposure ≈ 1.0`. Without sRGB encoding, all colours look washed out.
+15. **Always create a procedural PMREM environment map** (`scene.environment`) as in the template. This is mandatory for any scene containing glossy floors, glass, metal, or water — reflections are impossible without it in r128.
+16. **NEVER use `RectAreaLight`** — it silently emits NO light without `RectAreaLightUniformsLib`, which is unavailable in this sandbox. For ceiling panels, fluorescent tubes, windows, or any flat luminaire: use `emissive` + `emissiveIntensity` on the surface, plus 1–2 real `PointLight`/`SpotLight` to actually illuminate the room.
+17. **Indoor scenes need real fill light.** AmbientLight + HemisphereLight alone produce a flat, grey look. Add at least one `DirectionalLight` or 2–3 `PointLight`/`SpotLight` (respecting the ≤3 shadow-casting / ≤12 total limit) so geometry has visible relief and shadows.
+18. **Use procedural canvas textures for surface detail.** Generate `THREE.CanvasTexture` from a 2D canvas (noise, gradients, stripes, labels) and assign to `map` / `roughnessMap` / `normalMap`. This is fully self-contained and is the single biggest driver of realism. See §6.
 
 ---
 
@@ -320,9 +347,36 @@ The default Three.js look (rainbow colors, flat planes, cone-trees) is **forbidd
 - For repeated luminaires: use `emissive` + `emissiveIntensity`, not real lights.
 
 ### Materials
-- `MeshStandardMaterial` everywhere. `roughness`: 0.7–1.0 for natural surfaces, 0.1–0.4 for water/metal.
+- `MeshStandardMaterial` everywhere (use `MeshPhysicalMaterial` for glass/liquid: transmission: 0.9, thickness: 0.5). roughness: 0.7–1.0 natural surfaces, 0.1–0.4 water/metal. Glossy reflective surfaces (polished floors, glass) ONLY look reflective if scene.environment is set (§4 rule 15) — otherwise they render flat grey. Prefer roughnessMap over a single low roughness value to avoid plastic uniformity.
 - No `MeshBasicMaterial` except for sky-spheres or particle sprites.
 - At least one emissive material. At least 3 distinct materials per scene.
+
+### Procedural textures (REQUIRED for realism)
+Flat single-colour materials are the #1 cause of a "toy/Lego" look. For any surface larger than a small accent, generate a `CanvasTexture`:
+
+```javascript
+function makeNoiseTexture(base, variance, size = 256) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < size * size * 0.3; i++) {
+    const x = Math.random() * size, y = Math.random() * size;
+    const v = Math.floor((Math.random() - 0.5) * variance);
+    ctx.fillStyle = 'rgba(' + (128+v) + ',' + (128+v) + ',' + (128+v) + ',0.15)';
+    ctx.fillRect(x, y, 2, 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+```
+Use it as map for floors, walls, ground, fabric.
+Generate a separate non-sRGB canvas for roughnessMap (light = rough, dark = smooth) to break up uniform shininess — this sells reflective floors.
+For products/labels: draw coloured rectangles + simple shapes on a canvas and use as map.
+Set texture.repeat.set(nx, ny) to tile appropriately.
 
 ---
 
