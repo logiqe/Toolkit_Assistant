@@ -151,22 +151,34 @@ function loadChatHistory() {
 
 async function clearHistory() {
   if (!confirm('Clear chat and world? This cannot be undone.')) return;
-  
+
   // Vider côté serveur
-  await fetch(`/world-clear?board_id=${boardId || 'none'}`, { method: 'POST' });
-  
+  try {
+    await fetch(`/world-clear?board_id=${boardId || 'none'}`, { method: 'POST' });
+  } catch (e) {
+    console.warn('world-clear server call failed', e);
+  }
+
+  // Vider le localStorage
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(WORLD_CODE_KEY);
   localStorage.removeItem('world_code_latest');
-  
+  localStorage.removeItem('scene_url_latest');   // ← MANQUANT dans ton code !
+
+  // Réinitialiser les variables d'état
+  worldCode = null;
+  currentSceneUrl = null;                          // ← MANQUANT aussi !
+
+  // Vider le chat et réafficher le welcome
   const chatbox = document.getElementById('chatbox');
   chatbox.innerHTML = '';
   showWelcome();
-  
+
+  // Réinitialiser l'iframe
   const frame = document.getElementById('world-frame');
   frame.style.display = 'none';
+  frame.src = 'about:blank';   // mieux que srcdoc='' quand on utilise src=
   frame.srcdoc = '';
-  worldCode = null;
   document.getElementById('emptyState').style.display = 'flex';
 }
 
@@ -503,47 +515,50 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
 
 // ── INIT ──
 (async function() {
+  // 1. Restaurer le chat depuis localStorage EN PRIORITÉ
+  const restored = loadChatHistory();
+
+  // 2. Récupérer l'état du monde depuis le serveur
   try {
     const res = await fetch(`/world-state?board_id=${boardId || 'none'}`);
     const data = await res.json();
-    
-    const chatbox = document.getElementById('chatbox');
-    
-    if (data.chat_messages && data.chat_messages.length > 0) {
-      // Restore chat
-      data.chat_messages.forEach(({ side, text }) => {
-        const msg = document.createElement('div');
-        msg.className = `msg ${side}`;
-        const bubble = document.createElement('div');
-        bubble.className = `bubble ${side}`;
-        const displayText = Array.isArray(text)
-          ? text.filter(b => b.type === 'text').map(b => b.text).join(' ')
-          : (typeof text === 'string' ? text : JSON.stringify(text));
-        
-        bubble.textContent = displayText;
-        msg.appendChild(bubble);
-        chatbox.appendChild(msg);
-      });
-      chatbox.scrollTop = chatbox.scrollHeight;
-    } else {
-      showWelcome();
+
+    // Si localStorage était vide, tenter de restaurer depuis le serveur
+    if (!restored) {
+      if (data.chat_messages && data.chat_messages.length > 0) {
+        const chatbox = document.getElementById('chatbox');
+        data.chat_messages.forEach(({ side, text }) => {
+          const msg = document.createElement('div');
+          msg.className = `msg ${side}`;
+          const bubble = document.createElement('div');
+          bubble.className = `bubble ${side}`;
+          const displayText = Array.isArray(text)
+            ? text.filter(b => b.type === 'text').map(b => b.text).join(' ')
+            : (typeof text === 'string' ? text : JSON.stringify(text));
+          bubble.textContent = displayText;
+          msg.appendChild(bubble);
+          chatbox.appendChild(msg);
+        });
+        chatbox.scrollTop = chatbox.scrollHeight;
+      } else {
+        showWelcome();
+      }
     }
-    
-    // Restore world — prefer /scene/<board_id> URL
+
+    // 3. Restaurer le monde 3D
     if (data.world_code) {
       currentSceneUrl = `/scene/${boardId || 'none'}`;
       injectWorld(data.world_code);
     } else {
-      // Fallback: localStorage scene URL only (never srcdoc — breaks WebXR on Quest)
       const savedUrl = localStorage.getItem('scene_url_latest');
       if (savedUrl) {
         currentSceneUrl = savedUrl;
         injectWorld('');
       }
-      // ← srcdoc fallback supprimé intentionnellement
     }
   } catch(e) {
-    showWelcome();
+    // Si le serveur est down mais qu'on a déjà restauré le chat, on garde le chat
+    if (!restored) showWelcome();
   }
 })();
 
