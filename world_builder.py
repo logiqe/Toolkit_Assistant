@@ -162,6 +162,47 @@ def _inject_json_reminder(messages_copy: list[dict]) -> list[dict]:
     return messages_copy
 
 
+def _parse_model_response(raw: str) -> dict | None:
+    """
+    Robustly extract {"reply": ..., "world_code": ...} from the model's raw output.
+
+    Strategy (in order):
+    1. Standard json.loads — works when the model escapes correctly.
+    2. Extract reply/world_code with targeted regex — works when world_code
+       contains unescaped newlines or quotes that break json.loads.
+    3. Log and return None on total failure.
+    """
+    # 1. Happy path
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Targeted extraction: pull "reply" first (always short and clean)
+    reply_match = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', raw)
+    reply = reply_match.group(1) if reply_match else ""
+    # Unescape standard JSON escape sequences in reply
+    try:
+        reply = json.loads(f'"{reply}"')
+    except Exception:
+        pass
+
+    # Extract world_code: everything between the first <!DOCTYPE and last </html>
+    html_match = re.search(r'(<!DOCTYPE\s+html[\s\S]*?</html>)', raw, re.IGNORECASE)
+    if html_match:
+        world_code = html_match.group(1)
+        print(f"[world_builder] Used regex HTML extraction (json.loads failed)")
+        return {"reply": reply or "Here's your world!", "world_code": world_code}
+
+    # world_code might be null / absent
+    null_match = re.search(r'"world_code"\s*:\s*null', raw)
+    if null_match and reply:
+        return {"reply": reply, "world_code": None}
+
+    print(f"[world_builder] JSON parse totally failed. Raw:\n{raw[:1000]}")
+    return None
+
+
 def generate_world(conversation_history: list[dict], hardware_context: dict | None = None) -> dict:
     try:
         client = get_client()
@@ -207,20 +248,9 @@ def generate_world(conversation_history: list[dict], hardware_context: dict | No
         raw = re.sub(r'\s*```$', '', raw, flags=re.MULTILINE)
         raw = raw.strip()
 
-        try:
-            result = json.loads(raw)
-        except json.JSONDecodeError:
-            # Try to extract the outermost {...} 
-            json_match = re.search(r'^\{.*\}$', raw, re.DOTALL)
-            if json_match:
-                try:
-                    result = json.loads(json_match.group())
-                except json.JSONDecodeError as e:
-                    print(f"[world_builder] JSON parse failed: {e}\nRaw:\n{raw[:1000]}")
-                    return {"reply": "I had trouble formatting the scene. Try rephrasing your request.", "world_code": None}
-            else:
-                print(f"[world_builder] No JSON found. Raw:\n{raw[:1000]}")
-                return {"reply": raw[:400] if raw else "No response.", "world_code": None}
+        result = _parse_model_response(raw)
+        if result is None:
+            return {"reply": "I had trouble formatting the scene. Try rephrasing your request.", "world_code": None}
 
         world_code = result.get("world_code") or ""
         if world_code:
