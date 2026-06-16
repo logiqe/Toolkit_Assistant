@@ -43,6 +43,7 @@ admin_sessions: set[str] = set()
 RUNTIME_CONFIG = dict(settings)
 
 WORLD_STATE_FILE = "world_states.json"
+WORLD_SCENES_FILE = "world_scenes.json" 
 
 # ── WebSocket connections: board_id → list of connected WebSocket clients ──
 ws_connections: dict[str, list[WebSocket]] = {}
@@ -112,24 +113,20 @@ def save_logs_to_file():
 def save_world_states():
     with open(WORLD_STATE_FILE, "w") as f:
         json.dump(world_histories, f)
+    with open(WORLD_SCENES_FILE, "w") as f:
+        json.dump(world_scenes_raw, f)
 
 def load_world_states():
-    global world_histories
+    global world_histories, world_scenes, world_scenes_raw
     if os.path.exists(WORLD_STATE_FILE):
         with open(WORLD_STATE_FILE, "r") as f:
             world_histories = json.load(f)
-    # Reconstruit world_scenes depuis l'historique
-    for board_id, history in world_histories.items():
-        for msg in reversed(history):
-            if msg["role"] == "assistant":
-                try:
-                    data = json.loads(msg["content"])
-                    if data.get("world_code"):
-                        world_scenes[board_id] = _inject_sensor_bridge(data["world_code"])
-                        world_scenes_raw[board_id] = data["world_code"]
-                        break
-                except:
-                    pass
+    if os.path.exists(WORLD_SCENES_FILE):
+        with open(WORLD_SCENES_FILE, "r") as f:
+            world_scenes_raw = json.load(f)
+        # Réinjecte le bridge pour la version servie
+        for board_id, raw in world_scenes_raw.items():
+            world_scenes[board_id] = _inject_sensor_bridge(raw)
 
 # Au démarrage du serveur
 load_world_states()
@@ -456,6 +453,7 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
+        save_world_states()   
 
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 

@@ -180,6 +180,16 @@ async function clearHistory() {
   frame.src = 'about:blank';   // mieux que srcdoc='' quand on utilise src=
   frame.srcdoc = '';
   document.getElementById('emptyState').style.display = 'flex';
+
+  frame.style.width = '100%';
+  frame.style.height = '100%';   // l'iframe DOIT avoir une hauteur réelle (pas auto)
+
+  frame.onload = () => {
+    // force le resize dans l'iframe une fois chargée
+    setTimeout(() => {
+      frame.contentWindow.dispatchEvent(new Event('resize'));
+    }, 100);
+  };
 }
 
 // ── SENSOR CHIPS ──
@@ -429,7 +439,12 @@ function injectWorld(html) {
   emptyState.style.display = 'none';
 
   frame.addEventListener('load', () => {
-    // Re-apply passthrough if active
+    setTimeout(() => {
+      if (frame.contentWindow) {
+        frame.contentWindow.dispatchEvent(new Event('resize'));
+      }
+    }, 150);
+
     if (passthroughEnabled && frame.contentWindow) {
       setTimeout(() => {
         frame.contentWindow.postMessage({ type: 'passthrough', enabled: true }, '*');

@@ -243,6 +243,15 @@ renderer.setAnimationLoop(function() {
 </html>
 ```
 
+- The renderer MUST resize to the window, and call resize() once at startup:
+  function resize(){
+    const w = window.innerWidth || document.documentElement.clientWidth;
+    const h = window.innerHeight || document.documentElement.clientHeight;
+    renderer.setSize(w, h); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize();
+- Run the render loop continuously via requestAnimationFrame / setAnimationLoop.
+
 ---
 
 ## 4. RENDERING RULES (HARD — violating these breaks the scene)
