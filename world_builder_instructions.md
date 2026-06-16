@@ -50,7 +50,7 @@ For world_code: escape all backticks as \` and all backslashes as \\ inside the 
 ## 3. SCENE BASE TEMPLATE
 
 ## CRITICAL RENDERING RULES (apply before anything else)
-0. **The renderer MUST start fully opaque.** `alpha: true` is allowed ONLY because the passthrough bridge needs it, but you MUST call `renderer.setClearColor(0x0a0a14, 1)` immediately after setSize, AND set a non-null scene.background. Never rely on alpha for the base render.
+0. **The renderer MUST start fully opaque BEFORE any XR session.** call `renderer.setClearColor(0x0a0a14, 1)` immediately after setSize, AND set a non-null scene.background. The 'sessionstart' handler (§3) switches to transparent for AR passthrough — never make the base render transparent yourself.
 1. **WebGLRenderer MUST use `alpha: true`** (already in §12)
 2. **NEVER set `scene.background` to pure black** `0x000000` — use at minimum `0x0a0a14` or a gradient
 3. **After `renderer.setSize(...)`, always call `renderer.setClearColor(0x0a0a14, 1)`**
@@ -113,7 +113,7 @@ THREE.VRButton = {
           const sessionInit = {
             optionalFeatures: ['local-floor','bounded-floor','hand-tracking']
           };
-          navigator.xr.requestSession('immersive-vr', sessionInit)
+          navigator.xr.requestSession('immersive-ar', sessionInit)   // ← 'immersive-ar'
             .then(onSessionStarted)
             .catch(function(err) { console.error('requestSession failed:', err); });
         } else {
@@ -152,7 +152,7 @@ THREE.VRButton = {
       button.id = 'VRButton';
       button.style.display = 'none';
       stylizeElement(button);
-      navigator.xr.isSessionSupported('immersive-vr').then(function(supported) {
+      navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {   // ← 'immersive-ar'
         supported ? showEnterVR() : showWebXRNotFound();
       });
       return button;
@@ -194,6 +194,16 @@ renderer.xr.enabled = true;  // ← REQUIRED for Meta Quest VR/AR
 renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 window._renderer = renderer;
+
+renderer.xr.addEventListener('sessionstart', () => {
+  renderer.setClearColor(0x000000, 0);  // alpha 0 → passthrough visible
+  scene.background = null;               // PAS de Color en AR, sinon masque la caméra
+});
+renderer.xr.addEventListener('sessionend', () => {
+  renderer.setClearColor(0x0a0a1a, 1);  // restaure l'opacité hors session
+  scene.background = window._sceneBg;
+});
+
 
 // === VR BUTTON (shows "Enter VR" on Meta Quest, hidden on desktop) ===
 document.body.appendChild(THREE.VRButton.createButton(renderer));
@@ -428,7 +438,7 @@ natural surfaces, 0.1–0.4 for water/metal)? ✓
 - Adding `defer` attribute to the Three.js CDN script tag — it must load synchronously
 - Animating `camera.position`, `camera.rotation`, or calling `camera.lookAt()` 
   WITHOUT an `if (!renderer.xr.isPresenting)` guard — breaks VR launch (§13bis)
-- Calling `renderer.setClearColor(..., 0)` or `setClearAlpha(0)` — causes black screen on Quest
+- Calling `renderer.setClearColor(..., 0)` OUTSIDE an active immersive-ar session — causes black screen on Quest. Inside an immersive-ar session it is REQUIRED for passthrough (see §12bis).
 
 
 ## 10. JSON OUTPUT REMINDER
@@ -504,12 +514,18 @@ window._sceneBg = scene.background.clone();
 **Never call `renderer.setClearAlpha(1)` directly** — the bridge controls this per-frame.
 
 
-## 12bis. ALPHA & OPAQUE BACKGROUND (Quest black-screen prevention)
-`alpha:true` is required for passthrough, BUT the renderer MUST start 
-opaque or the Quest compositor renders nothing (black/loading):
-- ALWAYS call `renderer.setClearColor(0x0a0a1a, 1)` (alpha = 1) right after setSize.
-- ALWAYS set a non-null `scene.background` Color.
-- NEVER call `renderer.setClearAlpha(0)` yourself — the bridge handles transparency per-frame when passthrough activates.
+## 12bis. ALPHA & BACKGROUND — opaque outside session, transparent in AR
+`alpha:true` is required. The rule depends on the session state:
+- OUTSIDE an XR session (loading, desktop preview): the renderer MUST be opaque
+  → `renderer.setClearColor(0x0a0a1a, 1)` + non-null `scene.background`.
+  Otherwise the Quest compositor renders nothing (black loading screen).
+- INSIDE an `immersive-ar` session (passthrough): the renderer MUST be transparent
+  → `renderer.setClearColor(0x000000, 0)` + `scene.background = null`.
+  Otherwise the passthrough camera is hidden behind an opaque background (= "black background").
+- This switch is handled via the `renderer.xr.addEventListener('sessionstart' / 'sessionend', ...)`
+  events already present in the template §3. Never leave an opaque background during the AR session.
+
+
 
 ---
 
@@ -524,6 +540,7 @@ All WebXR setup is already in §3 (template). Just follow it:
 - Always use `renderer.setAnimationLoop(...)` — never `requestAnimationFrame`
 - `camera.position.set(0, 1.6, 5)` for VR standing eye height
 - Expose `window._renderer = renderer` so the parent frame can trigger XR
+- Request `immersive-ar` (NOT `immersive-vr`) so Quest passthrough can show through the transparent background. With `immersive-vr` the compositor always fills the background opaque → no passthrough possible.
 
 ### Why setAnimationLoop matters:
 `requestAnimationFrame` does not fire inside an immersive XR session 
@@ -531,7 +548,6 @@ on Meta Quest. Only `renderer.setAnimationLoop()` works in both
 desktop and VR contexts.
 
 ## 13bis. WEBXR — CAMERA CONTROL (CRITICAL — scene won't launch on Quest if violated)
-
 In immersive VR, the HEADSET controls the camera via head-tracking. 
 Three.js writes the camera matrix from headset poses every frame. 
 If you overwrite `camera.position` / `camera.rotation` / call 
@@ -576,7 +592,7 @@ These pass every other rule but STILL cause infinite loading on Quest.
 Verify ALL of them in every generated scene:
 1. **setSession MUST be wrapped in try/catch** and requestSession MUST have a .catch — a rejected promise leaves the headset in a loading state with no error shown. (See VRButton in §3.)
 2. **Set the reference space explicitly:** `renderer.xr.setReferenceSpaceType('local-floor');` immediately after `renderer.xr.enabled = true;`. Missing this is the #1 cause of infinite loading when everything else is correct.
-3. **The renderer must start opaque** (clearColor alpha = 1, non-null scene.background). A transparent base framebuffer makes the Quest compositor render nothing.
+3. **The renderer must start opaque** (clearColor alpha = 1, non-null scene.background) BEFORE the session begins. Switch to transparent (clearColor alpha 0, scene.background = null) only on 'sessionstart' for immersive-ar passthrough (§12bis).
 4. **No camera writes during isPresenting** (already in §13bis).
 5. **No heavy synchronous work at top level** (e.g. building 50k+ vertices in a blocking loop) — it can delay the first XR frame past the runtime's timeout. Keep top-level init light.
 6. **Never await anything between requestSession and setSession** other than setSession itself.
