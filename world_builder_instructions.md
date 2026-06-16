@@ -58,6 +58,7 @@ For world_code: escape all backticks as \` and all backslashes as \\ inside the 
 5. **Always add a HemisphereLight as a fill light** in addition to DirectionalLight:
    `new THREE.HemisphereLight(0x8888ff, 0x444422, 0.5)`
 6. **Test mentally**: if you removed all geometry, would the background still be visible? If not, fix it.
+7. **Light budget:** max 3 shadow-casting lights, ~12 lights total. Repeated luminaires = emissive materials, not real lights (§8.4bis). Violating this throws MAX_TEXTURE_IMAGE_UNITS(16) and breaks rendering.
 
 ```html
 <!DOCTYPE html>
@@ -333,6 +334,7 @@ Apply every single rule to every generated scene:
 9. React to EVERY sensor in the hardware context, when contextually meaningful
 10. Use `THREE.MathUtils.lerp` for all continuous sensor reactions — never instant jumps
 11. Always set `scene.background` to a non-black color — never `0x000000`
+12. No more than 3 lights with castShadow = true; repeated light sources faked with emissive materials (§8.4bis)
 
 
 ## 7. HARDWARE CONTEXT AWARENESS
@@ -410,6 +412,39 @@ sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.radius = 4;
 ```
 
+### 8.4bis — TEXTURE UNIT BUDGET (HARD LIMIT — prevents shader compile failure)
+
+The GPU allows a MAXIMUM of 16 texture units per shader. Each shadow-casting
+light consumes one or more texture units. Exceeding this causes a fatal
+shader error ("texture image units count exceeds MAX_TEXTURE_IMAGE_UNITS(16)")
+and the scene renders broken or black on Quest.
+
+HARD RULES — never violate:
+1. **MAXIMUM 3 lights total with `castShadow = true`** in the entire scene.
+   Pick the 2-3 most important ones (e.g. the sun, one key accent).
+2. **ALL other lights MUST have `castShadow = false`** (this is the default —
+   never set it to true on secondary lights).
+3. **NEVER create one real light per repeated object.** For rows of ceiling
+   lamps, street lights, glowing mushrooms, windows, etc., DO NOT add a
+   PointLight/SpotLight to each. Instead:
+   - Use `emissive` + `emissiveIntensity` on the lamp material to fake the glow.
+   - Add at most 1-2 real shadow-casting lights to anchor the scene.
+4. **Total light count (shadow + non-shadow) should stay under ~12.**
+   Beyond that, performance collapses on Quest even without the texture error.
+
+### Faking many light sources cheaply:
+For a corridor of 20 ceiling panels, make each panel a mesh with:
+```javascript
+const panelMat = new THREE.MeshStandardMaterial({
+  color: 0xfff4e0,
+  emissive: 0xfff4e0,
+  emissiveIntensity: 2.0
+});
+```
+Then add ONE soft AmbientLight + ONE HemisphereLight + ONE shadow-casting
+DirectionalLight to light the actual geometry. The emissive panels read as
+"lights" visually without consuming texture units.
+
 ### 8.5 — Atmosphere (the secret ingredient)
 - **Particles are optional** and should only appear in atmospheric/outdoor scenes, never for isolated object requests.
 - **Camera must be static.**
@@ -423,7 +458,6 @@ natural surfaces, 0.1–0.4 for water/metal)? ✓
 
 
 ## 9. ANTI-PATTERNS (NEVER DO)
-
 - Loading external assets (textures, models, fonts) from URLs — keep everything procedural
 - Using `THREE.OrbitControls` or other add-ons not in r128 core
 - Loading VRButton.js or ARButton.js from any CDN — use the inline version from §3
@@ -439,7 +473,7 @@ natural surfaces, 0.1–0.4 for water/metal)? ✓
 - Animating `camera.position`, `camera.rotation`, or calling `camera.lookAt()` 
   WITHOUT an `if (!renderer.xr.isPresenting)` guard — breaks VR launch (§13bis)
 - Calling `renderer.setClearColor(..., 0)` OUTSIDE an active immersive-ar session — causes black screen on Quest. Inside an immersive-ar session it is REQUIRED for passthrough (see §12bis).
-
+- Adding a real PointLight/SpotLight per repeated object (ceiling lamps, fireflies, windows) — this blows past MAX_TEXTURE_IMAGE_UNITS(16) and breaks the shader. Use emissive materials instead, with max 3 shadow-casting lights total (§8.4bis).
 
 ## 10. JSON OUTPUT REMINDER
 Your output is parsed as strict JSON by the server. The HTML inside `world_code` must be a single escaped string. Before responding, verify mentally: would `JSON.parse(yourOutput)` succeed without errors? If not, fix it first.
@@ -524,8 +558,6 @@ window._sceneBg = scene.background.clone();
   Otherwise the passthrough camera is hidden behind an opaque background (= "black background").
 - This switch is handled via the `renderer.xr.addEventListener('sessionstart' / 'sessionend', ...)`
   events already present in the template §3. Never leave an opaque background during the AR session.
-
-
 
 ---
 
