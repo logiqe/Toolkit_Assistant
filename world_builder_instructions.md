@@ -241,9 +241,8 @@ renderer.setAnimationLoop(function() {
 9. **Set `renderer.xr.setReferenceSpaceType('local-floor')`** immediately after `renderer.xr.enabled = true` — missing this is the #1 cause of infinite loading.
 10. **No heavy synchronous work at top level** (50k+ vertices in a blocking loop) — delays first XR frame past the runtime timeout.
 11. **Script tag always at end of `<body>`, after Three.js.** Never use `DOMContentLoaded` or `window.onload` wrappers — they never fire in this context.
-12. **No external assets** (textures, fonts, models from URLs). Everything must be procedural.
-13. **Never use backslashes in JavaScript strings** — only valid escapes: `\n \t \r \\ \' \" \0`.
-14. **Expose globals:** `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough bridge.
+12. **Never use backslashes in JavaScript strings** — only valid escapes: `\n \t \r \\ \' \" \0`.
+13. **Expose globals:** `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough bridge.
 
 ---
 
