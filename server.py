@@ -645,6 +645,13 @@ def _inject_sensor_bridge(html: str, standalone: bool = False) -> str:
 window.sensorData = {{}};
 window._passthroughActive = false;
 
+function _applyPassthrough(enabled) {{
+  document.documentElement.style.background = enabled ? 'transparent' : '';
+  document.body.style.background = enabled ? 'transparent' : '';
+  if (window._renderer) window._renderer.setClearColor(0x000000, enabled ? 0 : 1);
+  if (window._scene) window._scene.background = enabled ? null : (window._sceneBg || null);
+}}
+
 window.addEventListener('message', function(e) {{
   if (!e.data) return;
   if (e.data.type === 'sensor') {{
@@ -653,23 +660,36 @@ window.addEventListener('message', function(e) {{
   }}
   if (e.data.type === 'passthrough') {{
     window._passthroughActive = e.data.enabled;
-    document.documentElement.style.background = e.data.enabled ? 'transparent' : '';
-    document.body.style.background = e.data.enabled ? 'transparent' : '';
-    if (window._renderer) window._renderer.setClearColor(0x000000, e.data.enabled ? 0 : 1);
-    if (window._scene) window._scene.background = e.data.enabled ? null : (window._sceneBg || null);
+    _applyPassthrough(e.data.enabled);
   }}
 }});
 
-// Maintain passthrough every frame — poll in rAF, don't patch setAnimationLoop
+// Re-apply passthrough state on EVERY render call, inside the scene's own
+// render loop (setAnimationLoop) — never run a second, independent
+// requestAnimationFrame loop here. A second rAF loop competes with the
+// WebXR session's frame loop and is what was causing "Enter VR" to hang
+// indefinitely on Meta Quest.
 (function() {{
-  function passthroughTick() {{
-    if (window._passthroughActive && window._renderer) {{
-      window._renderer.setClearColor(0x000000, 0);
-      if (window._scene) window._scene.background = null;
-    }}
-    requestAnimationFrame(passthroughTick);
+  function patchRenderer() {{
+    if (!window._renderer || window._renderer.__passthroughPatched) return;
+    window._renderer.__passthroughPatched = true;
+    const originalRender = window._renderer.render.bind(window._renderer);
+    window._renderer.render = function(scene, camera) {{
+      if (window._passthroughActive) {{
+        this.setClearColor(0x000000, 0);
+        if (window._scene) window._scene.background = null;
+      }}
+      return originalRender(scene, camera);
+    }};
   }}
-  requestAnimationFrame(passthroughTick);
+  // The scene assigns window._renderer synchronously at creation time,
+  // but we poll briefly in case script order varies — capped, not infinite.
+  let tries = 0;
+  const poll = setInterval(function() {{
+    tries++;
+    if (window._renderer) {{ patchRenderer(); clearInterval(poll); }}
+    else if (tries > 100) {{ clearInterval(poll); }} // give up after ~10s
+  }}, 100);
 }})();
 
 {ws_client}
