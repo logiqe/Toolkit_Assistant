@@ -170,34 +170,28 @@ renderer.xr.setReferenceSpaceType('local-floor');
 document.body.appendChild(renderer.domElement);
 window._renderer = renderer;
 
-// === ENVIRONMENT MAP (procedural — enables reflections on metal/glossy materials) ===
-const pmrem = new THREE.PMREMGenerator(renderer);
-const envScene = new THREE.Scene();
-const envGrad = new THREE.Mesh(
-  new THREE.SphereGeometry(50, 32, 32),
-  new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x888899 })
-);
-envScene.add(envGrad);
-const envLight = new THREE.Mesh(
-  new THREE.SphereGeometry(5, 16, 16),
-  new THREE.MeshBasicMaterial({ color: 0xffffff })
-);
-envLight.position.set(0, 20, 0);
-envScene.add(envLight);
-const envMap = pmrem.fromScene(envScene, 0.04).texture;
-scene.environment = envMap;
-pmrem.dispose();
-
-renderer.xr.addEventListener('sessionstart', () => {
-  renderer.setClearColor(0x000000, 0);
-  scene.background = null;
-});
-renderer.xr.addEventListener('sessionend', () => {
-  renderer.setClearColor(0x0a0a1a, 1);
-  scene.background = window._sceneBg;
-});
-
-document.body.appendChild(THREE.VRButton.createButton(renderer));
+// === ENVIRONMENT MAP (procedural — wrapped: a failure must NEVER black out the scene) ===
+try {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  pmrem.compileEquirectangularShader();
+  const envScene = new THREE.Scene();
+  const envGrad = new THREE.Mesh(
+    new THREE.SphereGeometry(50, 32, 32),
+    new THREE.MeshBasicMaterial({ side: THREE.BackSide, color: 0x888899 })
+  );
+  envScene.add(envGrad);
+  const envLight = new THREE.Mesh(
+    new THREE.SphereGeometry(5, 16, 16),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+  envLight.position.set(0, 20, 0);
+  envScene.add(envLight);
+  const envMap = pmrem.fromScene(envScene, 0.04).texture;
+  scene.environment = envMap;
+  pmrem.dispose();
+} catch (e) {
+  console.warn('PMREM env map failed, continuing without reflections:', e);
+}
 
 // === LIGHTS ===
 const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -265,7 +259,7 @@ renderer.setAnimationLoop(function() {
 11. **Script tag always at end of `<body>`, after Three.js.** Never use `DOMContentLoaded` or `window.onload` wrappers — they never fire in this context.
 12. **Never use backslashes in JavaScript strings** — only valid escapes: `\n \t \r \\ \' \" \0`.
 13. **Expose globals:** `window._renderer`, `window._scene`, `window._sceneBg` — required for passthrough bridge.
-14. **Always set the colour pipeline** in the renderer: `outputEncoding = THREE.sRGBEncoding`, `toneMapping = THREE.ACESFilmicToneMapping`, `toneMappingExposure ≈ 1.0`. Without sRGB encoding, all colours look washed out.
+14. **Always set the colour pipeline:** `outputEncoding = THREE.sRGBEncoding`, `toneMapping = THREE.ACESFilmicToneMapping`, `toneMappingExposure = 1.2` (raised from 1.0 — ACES darkens the image, and 1.0 with dim lights is the #1 cause of near-black scenes). Without sRGB encoding colours look washed out; with ACES + dim lights everything looks black. Compensate with brighter lights (§4bis rule 8).
 15. **Always create a procedural PMREM environment map** (`scene.environment`) as in the template. This is mandatory for any scene containing glossy floors, glass, metal, or water — reflections are impossible without it in r128.
 16. **NEVER use `RectAreaLight`** — it silently emits NO light without `RectAreaLightUniformsLib`, which is unavailable in this sandbox. For ceiling panels, fluorescent tubes, windows, or any flat luminaire: use `emissive` + `emissiveIntensity` on the surface, plus 1–2 real `PointLight`/`SpotLight` to actually illuminate the room.
 17. **Indoor scenes need real fill light.** AmbientLight + HemisphereLight alone produce a flat, grey look. Add at least one `DirectionalLight` or 2–3 `PointLight`/`SpotLight` (respecting the ≤3 shadow-casting / ≤12 total limit) so geometry has visible relief and shadows.
@@ -337,8 +331,11 @@ The default Three.js look (rainbow colors, flat planes, cone-trees) is **forbidd
 - **Random Y rotation** on every placed object.
 
 ### Composition
-- **Single object request** (a desk, a lamp) → object only, centered in a dark void, no ground or trees.
-- **Full environment request** → three depth planes: 2–3 hero objects (z: 2–8), 10–20 midground (z: 10–25), 30+ tiny background (z: 30–60). Hide horizon with `FogExp2`.
+- **Single object request** (a desk, a lamp) → object only, centered near origin (z ≈ 0), camera looking at it. No ground or trees.
+- **Full environment request** → three depth planes: 2–3 hero objects (z: 0 to -8), 10–20 midground (z: -8 to -20), 30+ tiny background (z: -20 to -50).
+- **CRITICAL: the camera's `lookAt` target must match where the hero objects are.** If hero objects are around z=-4, use `camera.lookAt(0, 1.2, -4)` — never aim at empty space far beyond the geometry.
+- **Place the nearest hero object 3–6 units in front of the camera** so it fills a good portion of the frame on load.
+- Hide the horizon with fog, but per §4bis rule 3, fog must start AFTER the hero objects, never on top of them.
 
 ### Lighting
 - **Never a single white DirectionalLight from above** — that's the Three.js-demo signature.
