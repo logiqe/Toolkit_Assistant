@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<base href="/toolkit-assistant/">
+<script>const _f=fetch;fetch=(u,...a)=>_f(typeof u==='string'&&u.startsWith('/')?document.baseURI.replace(/\/$/,'')+u:u,...a);</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>World Builder — Toolkit</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="style.css">
 
 </head>
 <body class="world-page">
@@ -90,16 +92,9 @@
 const urlParams = new URLSearchParams(window.location.search);
 const boardId = urlParams.get('board_id');
 
-if (boardId) {
-  document.getElementById('mode-mc').dataset.href = `/?board_id=${boardId}`;
-} else {
-  document.getElementById('mode-mc').dataset.href = '/';
-}
-
 document.getElementById('mode-mc').style.cursor = 'pointer';
 document.getElementById('mode-mc').addEventListener('click', () => {
-  const href = document.getElementById('mode-mc').dataset.href || '/';
-  window.location.href = href;
+  window.location.href = boardId ? `${document.baseURI.replace(/world.*/, '')}?board_id=${boardId}` : document.baseURI.replace(/world.*/, '');
 });
 
 // ── STATE ──
@@ -212,7 +207,7 @@ buildSensorChips();
 function connectWS() {
   if (!boardId) return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/${boardId}`);
+  ws = new WebSocket(`${proto}://${location.host}${new URL('ws/'+boardId, document.baseURI).pathname}`);
 
   ws.onopen = () => {
     document.getElementById('ws-dot').className = 'ws-dot connected';

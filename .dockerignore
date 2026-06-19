@@ -1,0 +1,19 @@
+.env
+.env.*
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+
+# runtime state (persisted via Docker volumes)
+uploads/
+world_states.json
+world_scenes.json
+test_participants_logs.json
+archives.json
+assistant_state.json
+
+# not needed in the container
+README.md
+Simple-assistant.py

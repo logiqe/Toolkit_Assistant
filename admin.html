@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<base href="/toolkit-assistant/">
+<script>const _f=fetch;fetch=(u,...a)=>_f(typeof u==='string'&&u.startsWith('/')?document.baseURI.replace(/\/$/,'')+u:u,...a);</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Toolkit Admin</title>
@@ -673,7 +675,7 @@
                         <div class="session-meta">${msgCount} messages</div>
                     </div>
                     <div class="session-actions">
-                        <a href="/?board_id=${id}" target="_blank">
+                        <a href="./?board_id=${id}" target="_blank">
                             <button class="btn-ghost btn-sm">Open chat</button>
                         </a>
                         <button class="btn-danger btn-sm" onclick="clearSession('${id}')">Clear</button>

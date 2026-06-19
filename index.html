@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+<base href="/toolkit-assistant/">
+<script>const _f=fetch;fetch=(u,...a)=>_f(typeof u==='string'&&u.startsWith('/')?document.baseURI.replace(/\/$/,'')+u:u,...a);</script>
     <title>Toolkit Assistant</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -56,7 +58,7 @@
         function connectWS() {
             if (!boardId) return;
             const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-            ws = new WebSocket(`${proto}://${location.host}/ws/${boardId}`);
+            ws = new WebSocket(`${proto}://${location.host}${new URL('ws/'+boardId, document.baseURI).pathname}`);
 
             ws.onopen = () => {
                 document.getElementById('ws-dot').className = 'ws-dot connected';
@@ -93,7 +95,7 @@
         const modeVrEl = document.getElementById('mode-vr');
         modeVrEl.style.cursor = 'pointer';
         modeVrEl.addEventListener('click', () => {
-            window.location.href = boardId ? `/world?board_id=${boardId}` : '/world';
+            window.location.href = boardId ? `${document.baseURI}world?board_id=${boardId}` : `${document.baseURI}world`;
         });
 
         async function sendMessage() {

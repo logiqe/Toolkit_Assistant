@@ -42,8 +42,11 @@ sessions = {}
 admin_sessions: set[str] = set()
 RUNTIME_CONFIG = dict(settings)
 
-WORLD_STATE_FILE = "world_states.json"
-WORLD_SCENES_FILE = "world_scenes.json" 
+DATA_DIR = os.environ.get("DATA_DIR", ".")
+WORLD_STATE_FILE = os.path.join(DATA_DIR, "world_states.json")
+WORLD_SCENES_FILE = os.path.join(DATA_DIR, "world_scenes.json")
+LOGS_FILE = os.path.join(DATA_DIR, "test_participants_logs.json")
+ARCHIVES_FILE = os.path.join(DATA_DIR, "archives.json")
 
 # ── WebSocket connections: board_id → list of connected WebSocket clients ──
 ws_connections: dict[str, list[WebSocket]] = {}
@@ -94,9 +97,9 @@ def reload_runtime_config():
 
 def load_logs_from_file():
     global sessions
-    if os.path.exists("test_participants_logs.json"):
+    if os.path.exists(LOGS_FILE):
         try:
-            with open("test_participants_logs.json", "r", encoding="utf-8") as f:
+            with open(LOGS_FILE, "r", encoding="utf-8") as f:
                 sessions = json.load(f)
             print(f"✅ {len(sessions)} sessions restored")
         except Exception as e:
@@ -105,7 +108,7 @@ def load_logs_from_file():
 
 def save_logs_to_file():
     try:
-        with open("test_participants_logs.json", "w", encoding="utf-8") as f:
+        with open(LOGS_FILE, "w", encoding="utf-8") as f:
             json.dump(sessions, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"Error while saving logs: {e}")
@@ -312,7 +315,8 @@ async def startup():
 @app.get("/")
 async def index(request: Request, board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
     if not is_user(user_token):
-        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+        root = request.scope.get("root_path", "")
+        redirect_url = f"{root}/login?board_id={board_id}" if board_id else f"{root}/login"
         return RedirectResponse(redirect_url)
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
@@ -324,9 +328,10 @@ async def get_style():
 
 
 @app.get("/world")
-async def get_world_page(board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
+async def get_world_page(request: Request, board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
     if not is_user(user_token):
-        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+        root = request.scope.get("root_path", "")
+        redirect_url = f"{root}/login?board_id={board_id}" if board_id else f"{root}/login"
         return RedirectResponse(redirect_url)
     with open("world.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
@@ -896,9 +901,10 @@ async def admin_logout(response: Response, admin_token: str = Cookie(default=Non
 
 
 @app.get("/admin")
-async def admin_page(admin_token: str = Cookie(default=None)):
+async def admin_page(request: Request, admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
-        return RedirectResponse("/admin/login")
+        root = request.scope.get("root_path", "")
+        return RedirectResponse(f"{root}/admin/login")
     with open("admin.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -959,8 +965,8 @@ async def restart_server(admin_token: str = Cookie(default=None)):
 def archive_session(board_id: str, session: dict):
     try:
         archives = {}
-        if os.path.exists("archives.json"):
-            with open("archives.json", "r", encoding="utf-8") as f:
+        if os.path.exists(ARCHIVES_FILE):
+            with open(ARCHIVES_FILE, "r", encoding="utf-8") as f:
                 archives = json.load(f)
 
         if board_id not in archives:
@@ -972,7 +978,7 @@ def archive_session(board_id: str, session: dict):
             "calibrated_sensors": session.get("calibrated_sensors", {})
         })
 
-        with open("archives.json", "w", encoding="utf-8") as f:
+        with open(ARCHIVES_FILE, "w", encoding="utf-8") as f:
             json.dump(archives, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"Error archiving session: {e}")
@@ -994,9 +1000,9 @@ async def clear_session(board_id: str = Query(...), admin_token: str = Cookie(de
 async def get_archives(admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    if not os.path.exists("archives.json"):
+    if not os.path.exists(ARCHIVES_FILE):
         return {}
-    with open("archives.json", "r", encoding="utf-8") as f:
+    with open(ARCHIVES_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
