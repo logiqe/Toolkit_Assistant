@@ -133,6 +133,7 @@
                         <div class="bubble ai">${data.reply || data.answer}</div>
                     </div>`;
                 chatbox.scrollTop = chatbox.scrollHeight;
+                saveMcHistory();
 
                 const cmd = data.command || (data.MQTT_value && data.MQTT_value.command);
                 if (cmd && cmd.startsWith("calibrate_")) {
@@ -188,6 +189,40 @@
 
         const chatbox = document.getElementById("chatbox");
 
+        // ── LOCAL STORAGE: persist MC chat across page navigations ──
+        const MC_STORAGE_KEY = `mc_history_${boardId}`;
+
+        function saveMcHistory() {
+            const messages = [];
+            chatbox.querySelectorAll('.message-container').forEach(container => {
+                const bubble = container.querySelector('.bubble');
+                if (!bubble) return;
+                const side = bubble.classList.contains('user') ? 'user' : 'ai';
+                messages.push({ side, html: bubble.innerHTML });
+            });
+            localStorage.setItem(MC_STORAGE_KEY, JSON.stringify(messages));
+        }
+
+        function loadMcHistory() {
+            const saved = localStorage.getItem(MC_STORAGE_KEY);
+            if (!saved) return false;
+            try {
+                const messages = JSON.parse(saved);
+                if (!messages.length) return false;
+                chatbox.innerHTML = '';
+                messages.forEach(({ side, html }) => {
+                    chatbox.innerHTML += `
+                        <div class="message-container ${side}-container">
+                            <div class="bubble ${side}">${html}</div>
+                        </div>`;
+                });
+                chatbox.scrollTop = chatbox.scrollHeight;
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+
         async function loadWelcome() {
             const response = await fetch("/welcome");
             const data = await response.json();
@@ -195,9 +230,14 @@
                 <div class="message-container ai-container">
                     <div class="bubble ai">${data.message}</div>
                 </div>`;
+            saveMcHistory();
         }
 
         async function initPage() {
+            // 1. Try localStorage first (survives page navigation instantly)
+            if (boardId && loadMcHistory()) return;
+
+            // 2. Fallback: fetch from server
             try {
                 if (boardId) {
                     const response = await fetch(`/history?board_id=${boardId}`);
@@ -212,6 +252,7 @@
                                 </div>`;
                         });
                         chatbox.scrollTop = chatbox.scrollHeight;
+                        saveMcHistory();
                     } else {
                         await loadWelcome();
                     }
@@ -230,6 +271,7 @@
             if (confirm("Do you want to start a new conversation?")) {
                 const response = await fetch(`/reset?board_id=${boardId}`, { method: "POST" });
                 if (response.ok) {
+                    localStorage.removeItem(MC_STORAGE_KEY);
                     chatbox.innerHTML = "";
                     await loadWelcome();
                 }
