@@ -355,6 +355,15 @@ async def reset_conversation(board_id: str = Query(...)):
     session["calibrated_sensors"] = {}
     session.pop("pending_hardware_update", None)
 
+    # Also reset the linked session_id session (used by /chat)
+    linked = session.pop("linked_session_id", None)
+    if linked and linked in sessions:
+        linked_session = sessions[linked]
+        linked_session["thread_id"] = await create_new_thread()
+        linked_session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
+        linked_session["calibrated_sensors"] = {}
+        linked_session.pop("pending_hardware_update", None)
+
     # Also reset world history for this board
     world_histories.pop(board_id, None)
 
@@ -371,6 +380,11 @@ async def chat_with_ai(
     # Utilise session_id si dispo, sinon fallback board_id (rétrocompat)
     key = session_id if session_id else board_id
     session = get_session(key)
+
+    # Mémorise le session_id dans la session board_id pour que /reset puisse tout vider
+    if session_id and session_id != board_id:
+        board_session = get_session(board_id)
+        board_session["linked_session_id"] = session_id
     if session["thread_id"] is None:
         session["thread_id"] = await create_new_thread()
 
