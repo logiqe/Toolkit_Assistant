@@ -311,9 +311,9 @@ async def startup():
 
 @app.get("/")
 async def index(request: Request, board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
-    if not is_user(user_token):
-        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
-        return RedirectResponse(redirect_url)
+#    if not is_user(user_token):
+#        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+#        return RedirectResponse(redirect_url)
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -325,9 +325,9 @@ async def get_style():
 
 @app.get("/world")
 async def get_world_page(board_id: str = Query(default=None), user_token: str = Cookie(default=None)):
-    if not is_user(user_token):
-        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
-        return RedirectResponse(redirect_url)
+#    if not is_user(user_token):
+#        redirect_url = f"/login?board_id={board_id}" if board_id else "/login"
+#        return RedirectResponse(redirect_url)
     with open("world.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
@@ -366,7 +366,7 @@ async def chat_with_ai(
     user_input: UserInput,
     board_id: str = Query(...),
     session_id: str = Cookie(default=None),
-    user_token: str = Cookie(default=None)
+#    user_token: str = Cookie(default=None)
 ):
     # Utilise session_id si dispo, sinon fallback board_id (rétrocompat)
     key = session_id if session_id else board_id
