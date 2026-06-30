@@ -1180,12 +1180,18 @@ async def user_login_page():
 
 @app.post("/user/send-code")
 async def send_code(data: EmailInput):
+    whitelist = RUNTIME_CONFIG.get("email_domain_whitelist", [])
+    if whitelist:
+        domain = data.email.split("@")[-1].lower()
+        if domain not in whitelist:
+            return JSONResponse({"error": "Email domain not allowed"}, status_code=403)
+
     code = str(random.randint(100000, 999999))
     pending_verifications[data.email] = {
         "code": code,
         "expires": time.time() + 600
     }
-    await asyncio.to_thread(_send_email, data.email, code)  # ← non-bloquant
+    await asyncio.to_thread(_send_email, data.email, code)
     return {"status": "sent"}
 
 

@@ -87,6 +87,9 @@ settings = {
     "smtp_user": _optional("SMTP_USER"),
     "smtp_password": _optional("SMTP_PASSWORD"),
     "smtp_from": _optional("SMTP_FROM"),
+    "email_domain_whitelist": [
+        d.strip().lower() for d in _optional("EMAIL_DOMAIN_WHITELIST").split(",") if d.strip()
+    ],
 }
 
 def reload_settings():
@@ -118,3 +121,6 @@ def reload_settings():
     settings["smtp_user"] = _optional("SMTP_USER")
     settings["smtp_password"] = _optional("SMTP_PASSWORD")
     settings["smtp_from"] = _optional("SMTP_FROM")
+    settings["email_domain_whitelist"] = [
+        d.strip().lower() for d in _optional("EMAIL_DOMAIN_WHITELIST").split(",") if d.strip()
+    ]
