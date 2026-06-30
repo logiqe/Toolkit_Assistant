@@ -78,6 +78,15 @@ settings = {
     "assistant_state_file": _resolve_path(
         _optional("OPENAI_ASSISTANT_STATE_FILE", "assistant_state.json")
     ),
+    # Email
+    "email_backend": _optional("EMAIL_BACKEND", "resend"),
+    "resend_api_key": _optional("RESEND_API_KEY"),
+    "smtp_host": _optional("SMTP_HOST"),
+    "smtp_port": _optional_int("SMTP_PORT", 587),
+    "smtp_use_ssl": _optional("SMTP_USE_SSL", "false").lower() == "true",
+    "smtp_user": _optional("SMTP_USER"),
+    "smtp_password": _optional("SMTP_PASSWORD"),
+    "smtp_from": _optional("SMTP_FROM"),
 }
 
 def reload_settings():
@@ -97,7 +106,15 @@ def reload_settings():
     settings["assistant_model"] = _optional("OPENAI_ASSISTANT_MODEL", "gpt-4o-mini")
     settings["assistant_name"] = _optional("OPENAI_ASSISTANT_NAME", "Windmill Assistant")
     settings["assistant_description"] = _optional("OPENAI_ASSISTANT_DESCRIPTION", "Controls windmill presets via MQTT.")
-    # les *_file ne changent pas en pratique, mais au cas où :
     settings["assistant_instructions_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_INSTRUCTIONS_FILE", "assistant_instructions.md"))
     settings["assistant_schema_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_SCHEMA_FILE", "assistant_response_schema.json"))
     settings["assistant_state_file"] = _resolve_path(_optional("OPENAI_ASSISTANT_STATE_FILE", "assistant_state.json"))
+    # Email
+    settings["email_backend"] = _optional("EMAIL_BACKEND", "resend")
+    settings["resend_api_key"] = _optional("RESEND_API_KEY")
+    settings["smtp_host"] = _optional("SMTP_HOST")
+    settings["smtp_port"] = _optional_int("SMTP_PORT", 587)
+    settings["smtp_use_ssl"] = _optional("SMTP_USE_SSL", "false").lower() == "true"
+    settings["smtp_user"] = _optional("SMTP_USER")
+    settings["smtp_password"] = _optional("SMTP_PASSWORD")
+    settings["smtp_from"] = _optional("SMTP_FROM")

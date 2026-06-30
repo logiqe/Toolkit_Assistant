@@ -347,6 +347,68 @@
             margin-bottom: 2px;
         }
 
+        /* ---- LOGS ---- */
+        .log-row {
+            background: var(--white);
+            border: 1px solid rgba(0,0,0,0.07);
+            border-radius: 10px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .log-meta {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .log-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: 20px;
+            background: var(--orange);
+            color: var(--white);
+        }
+
+        .log-badge.ai    { background: var(--brown); }
+        .log-badge.user  { background: var(--orange); }
+        .log-badge.assistant { background: var(--brown); }
+
+        .log-board { font-size: 11px; font-family: monospace; color: var(--muted); }
+        .log-ts    { font-size: 11px; color: var(--muted); margin-left: auto; }
+        .log-text  { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+        .log-mqtt {
+            font-size: 11px;
+            font-family: monospace;
+            background: #f3e8d8;
+            border-radius: 6px;
+            padding: 4px 8px;
+            color: var(--brown);
+        }
+
+        .log-scene-tag {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--orange);
+            text-transform: uppercase;
+        }
+
+        .logs-controls {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            margin-bottom: 14px;
+        }
+
+        .logs-controls .field { flex: 1; min-width: 140px; }
+
     </style>
 </head>
 <body>
@@ -463,6 +525,30 @@
             <hr class="divider">
             <div class="section-actions">
                 <button class="btn-danger btn-sm" onclick="clearAllSessions()">Clear all sessions</button>
+            </div>
+        </div>
+
+        <!-- LOGS -->
+        <div class="card">
+            <div class="card-title">Logs</div>
+            <div class="logs-controls">
+                <div class="field">
+                    <label>Board ID</label>
+                    <input type="text" id="logs-board-id" placeholder="leave blank for all boards">
+                </div>
+                <div class="field" style="max-width:100px;">
+                    <label>Limit</label>
+                    <select id="logs-limit">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                    </select>
+                </div>
+                <button class="btn-ghost btn-sm" onclick="loadChatLogs()">Chat logs</button>
+                <button class="btn-ghost btn-sm" onclick="loadWorldLogs()">World logs</button>
+            </div>
+            <div id="logs-list" class="sessions-list">
+                <div class="empty-state">Choose Chat logs or World logs to load</div>
             </div>
         </div>
 
@@ -853,6 +939,56 @@
             .replace(/'/g, "&#39;");
     }
 
+
+    // ---- LOGS ----
+
+    function logsParams() {
+        const boardId = document.getElementById("logs-board-id").value.trim();
+        const limit   = document.getElementById("logs-limit").value;
+        const qs      = new URLSearchParams({ limit });
+        if (boardId) qs.set("board_id", boardId);
+        return qs.toString();
+    }
+
+    async function loadChatLogs() {
+        const list = document.getElementById("logs-list");
+        list.innerHTML = `<div class="empty-state">Loading...</div>`;
+        const res = await fetch(`/admin/logs/chat?${logsParams()}`);
+        if (!res.ok) { list.innerHTML = `<div class="empty-state">Failed to load</div>`; return; }
+        const rows = await res.json();
+        if (!rows.length) { list.innerHTML = `<div class="empty-state">No chat messages found</div>`; return; }
+        list.innerHTML = rows.map(r => `
+            <div class="log-row">
+                <div class="log-meta">
+                    <span class="log-badge ${r.sender}">${r.sender}</span>
+                    <span class="log-board">${escapeHtml(r.board_id)}</span>
+                    ${r.session_id ? `<span class="log-board">${escapeHtml(r.session_id)}</span>` : ""}
+                    <span class="log-ts">${new Date(r.ts).toLocaleString()}</span>
+                </div>
+                <div class="log-text">${escapeHtml(r.text)}</div>
+                ${r.mqtt_command ? `<div class="log-mqtt">MQTT → ${escapeHtml(r.mqtt_command)}</div>` : ""}
+            </div>`).join("");
+    }
+
+    async function loadWorldLogs() {
+        const list = document.getElementById("logs-list");
+        list.innerHTML = `<div class="empty-state">Loading...</div>`;
+        const res = await fetch(`/admin/logs/worlds?${logsParams()}`);
+        if (!res.ok) { list.innerHTML = `<div class="empty-state">Failed to load</div>`; return; }
+        const rows = await res.json();
+        if (!rows.length) { list.innerHTML = `<div class="empty-state">No world messages found</div>`; return; }
+        list.innerHTML = rows.map(r => `
+            <div class="log-row">
+                <div class="log-meta">
+                    <span class="log-badge ${r.role}">${r.role}</span>
+                    <span class="log-board">${escapeHtml(r.board_id)}</span>
+                    ${r.scene_id ? `<span class="log-scene-tag">scene #${r.scene_id}</span>` : ""}
+                    <span class="log-ts">${new Date(r.ts).toLocaleString()}</span>
+                </div>
+                <div class="log-text">${escapeHtml(typeof r.content === "string" ? r.content : JSON.stringify(r.content))}</div>
+                ${r.trigger_prompt ? `<div class="log-mqtt">Triggered by → ${escapeHtml(r.trigger_prompt)}</div>` : ""}
+            </div>`).join("");
+    }
 
     // Init
     checkAuth();

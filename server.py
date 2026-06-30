@@ -13,13 +13,12 @@ import base64
 import httpx
 import paho.mqtt.client as mqtt
 import smtplib, random, time
-import resend
-
 from email.mime.text import MIMEText
 
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set() 
@@ -136,6 +135,7 @@ load_world_states()
 
 @app.on_event("startup")
 async def startup_event():
+    await init_db()
     load_logs_from_file()
     load_world_states()
     print(f"🚀 Server started — {len(world_histories)} world states loaded")
@@ -280,24 +280,53 @@ def is_admin(admin_token: str = Cookie(default=None)) -> bool:
 def is_user(user_token: str | None) -> bool:
     return user_token in user_sessions
 
-def _send_email(to: str, code: str):
-    RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+def _send_via_resend(to: str, code: str) -> None:
+    api_key = RUNTIME_CONFIG.get("resend_api_key") or os.environ.get("RESEND_API_KEY")
     with httpx.Client() as client:
         r = client.post(
             "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
                 "from": "Toolkit <onboarding@resend.dev>",
                 "to": [to],
                 "subject": "Your access code",
-                "text": f"Your access code: {code}\n\nValid for 10 minutes."
-            }
+                "text": f"Your access code: {code}\n\nValid for 10 minutes.",
+            },
         )
     if r.status_code != 200:
         raise Exception(f"Resend error: {r.status_code} {r.text}")
+
+
+def _send_via_smtp(to: str, code: str) -> None:
+    host     = RUNTIME_CONFIG["smtp_host"]
+    port     = RUNTIME_CONFIG["smtp_port"]
+    user     = RUNTIME_CONFIG["smtp_user"]
+    password = RUNTIME_CONFIG["smtp_password"]
+    from_addr = RUNTIME_CONFIG["smtp_from"] or user
+    use_ssl  = RUNTIME_CONFIG["smtp_use_ssl"]
+
+    msg = MIMEText(f"Your access code: {code}\n\nValid for 10 minutes.")
+    msg["Subject"] = "Your access code"
+    msg["From"]    = from_addr
+    msg["To"]      = to
+
+    if use_ssl:
+        with smtplib.SMTP_SSL(host, port) as smtp:
+            smtp.login(user, password)
+            smtp.sendmail(from_addr, [to], msg.as_string())
+    else:
+        with smtplib.SMTP(host, port) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.sendmail(from_addr, [to], msg.as_string())
+
+
+def _send_email(to: str, code: str) -> None:
+    backend = RUNTIME_CONFIG.get("email_backend", "resend")
+    if backend == "smtp":
+        _send_via_smtp(to, code)
+    else:
+        _send_via_resend(to, code)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # PUBLIC ROUTES
@@ -355,6 +384,8 @@ async def reset_conversation(board_id: str = Query(...)):
     if len(session.get("history", [])) > 1:
         archive_session(board_id, session)
 
+    await log_session_end(board_id)
+
     session["thread_id"] = await create_new_thread()
     session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
     session["calibrated_sensors"] = {}
@@ -403,6 +434,10 @@ async def chat_with_ai(
 
     session["history"].append({"sender": "ai", "text": texte_ia})
     save_logs_to_file()
+
+    await log_chat_message(board_id, session_id, "user", user_input.text)
+    await log_chat_message(board_id, session_id, "ai", texte_ia,
+                           mqtt_command=json.dumps(valeurs_mqtt) if valeurs_mqtt else None)
 
     return {"reply": texte_ia, "MQTT_value": valeurs_mqtt}
 
@@ -455,10 +490,15 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
         world_histories[board_id] = world_histories[board_id][-40:]
 
     # Store latest scene for /scene/<board_id> — served as a real URL (no srcdoc)
+    scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
-        save_world_states()   
+        save_world_states()
+        scene_id = await log_world_scene(board_id, result["world_code"], user_input.text)
+
+    await log_world_message(board_id, "user", user_input.text)
+    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."), scene_id=scene_id)
 
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 
@@ -548,9 +588,14 @@ async def world_chat_with_files(
     if len(world_histories[board_id]) > 40:
         world_histories[board_id] = world_histories[board_id][-40:]
 
+    scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
+        scene_id = await log_world_scene(board_id, result["world_code"], user_text)
+
+    await log_world_message(board_id, "user", content_parts if image_parts else user_text)
+    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."), scene_id=scene_id)
 
     print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
     return {
@@ -1006,6 +1051,28 @@ async def get_archives(admin_token: str = Cookie(default=None)):
         return json.load(f)
 
 
+@app.get("/admin/logs/chat")
+async def admin_chat_logs(
+    admin_token: str = Cookie(default=None),
+    board_id: str = Query(default=None),
+    limit: int = Query(default=50),
+):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return await get_chat_logs(board_id=board_id, limit=limit)
+
+
+@app.get("/admin/logs/worlds")
+async def admin_world_logs(
+    admin_token: str = Cookie(default=None),
+    board_id: str = Query(default=None),
+    limit: int = Query(default=50),
+):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return await get_world_logs(board_id=board_id, limit=limit)
+
+
 @app.post("/admin/clear-all")
 async def clear_all_sessions(admin_token: str = Cookie(default=None)):
     if not is_admin(admin_token):
@@ -1129,5 +1196,7 @@ async def verify_code(data: CodeInput, response: Response):
     
     response.set_cookie("user_token", token, httponly=True, samesite="strict")
     response.set_cookie("session_id", session_id, httponly=True, samesite="strict")
-    
+
+    await log_session_start(data.board_id, data.email, session_id)
+
     return {"status": "ok", "session_id": session_id}
