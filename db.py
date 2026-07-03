@@ -157,16 +157,19 @@ async def log_session_end(board_id: str) -> None:
 def _get_chat_logs_sync(board_id, limit) -> list[dict]:
     with _connect() as conn:
         conn.row_factory = sqlite3.Row
+        q = """
+            SELECT cm.*, s.user_email
+            FROM chat_messages cm
+            LEFT JOIN sessions s ON s.session_id = cm.session_id
+            {where}
+            ORDER BY cm.ts DESC LIMIT ?
+        """
         if board_id:
             rows = conn.execute(
-                "SELECT * FROM chat_messages WHERE board_id=? ORDER BY ts DESC LIMIT ?",
-                (board_id, limit),
+                q.format(where="WHERE cm.board_id=?"), (board_id, limit)
             ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM chat_messages ORDER BY ts DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            rows = conn.execute(q.format(where=""), (limit,)).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -179,7 +182,10 @@ def _get_world_logs_sync(board_id, limit) -> list[dict]:
         conn.row_factory = sqlite3.Row
         q = """
             SELECT wm.id, wm.board_id, wm.role, wm.content, wm.scene_id, wm.ts,
-                   ws.trigger_prompt
+                   ws.trigger_prompt,
+                   (SELECT user_email FROM sessions
+                    WHERE board_id = wm.board_id
+                    ORDER BY started_at DESC LIMIT 1) AS user_email
             FROM world_messages wm
             LEFT JOIN world_scenes ws ON wm.scene_id = ws.id
             {where}
