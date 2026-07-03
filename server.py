@@ -130,9 +130,6 @@ def load_world_states():
         for board_id, raw in world_scenes_raw.items():
             world_scenes[board_id] = _inject_sensor_bridge(raw)
 
-# Au démarrage du serveur
-load_world_states()
-
 @app.on_event("startup")
 async def startup_event():
     await init_db()
