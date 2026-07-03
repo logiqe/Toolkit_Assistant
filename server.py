@@ -310,14 +310,16 @@ def _send_via_smtp(to: str, code: str) -> None:
     if use_ssl:
         with smtplib.SMTP_SSL(host, port) as smtp:
             smtp.ehlo()
-            smtp.login(user, password)
+            if user and password:
+                smtp.login(user, password)
             smtp.sendmail(from_addr, [to], msg.as_string())
     else:
         with smtplib.SMTP(host, port) as smtp:
             smtp.ehlo()
             smtp.starttls()
-            smtp.ehlo()  # re-identify after TLS so server advertises AUTH
-            smtp.login(user, password)
+            smtp.ehlo()
+            if user and password:
+                smtp.login(user, password)
             smtp.sendmail(from_addr, [to], msg.as_string())
 
 
