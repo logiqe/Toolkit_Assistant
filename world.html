@@ -435,9 +435,11 @@ function injectWorld(html) {
 
   frame.addEventListener('load', () => {
     setTimeout(() => {
-      if (frame.contentWindow) {
-        frame.contentWindow.dispatchEvent(new Event('resize'));
-      }
+      try {
+        if (frame.contentWindow) {
+          frame.contentWindow.dispatchEvent(new Event('resize'));
+        }
+      } catch(e) {}
     }, 150);
 
     if (passthroughEnabled && frame.contentWindow) {
@@ -562,7 +564,7 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
     } else {
       const savedUrl = localStorage.getItem('scene_url_latest');
       if (savedUrl) {
-        currentSceneUrl = savedUrl;
+        currentSceneUrl = savedUrl.replace(/^\//, '');
         injectWorld('');
       }
     }
