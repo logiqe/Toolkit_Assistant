@@ -273,6 +273,15 @@
             margin: 4px 0;
         }
 
+        .subsection-title {
+            font-size: 0.7em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--muted);
+            margin-bottom: 8px;
+        }
+
         .archive-board {
             background: var(--white);
             border: 1px solid rgba(0,0,0,0.08);
@@ -550,6 +559,16 @@
             </div>
             <div id="logs-list" class="sessions-list">
                 <div class="empty-state">Choose Chat logs or World logs to load</div>
+            </div>
+            <hr class="divider">
+            <div class="subsection-title">Export</div>
+            <div class="logs-controls">
+                <select id="export-format" style="font-size:12px;padding:4px 8px;border:1px solid rgba(0,0,0,0.15);border-radius:6px;background:var(--white);">
+                    <option value="json">JSON</option>
+                    <option value="csv">CSV</option>
+                </select>
+                <button class="btn-ghost btn-sm" onclick="exportLogs('chat')">↓ Chat logs</button>
+                <button class="btn-ghost btn-sm" onclick="exportLogs('worlds')">↓ World logs</button>
             </div>
         </div>
 
@@ -990,6 +1009,46 @@
                 <div class="log-text">${escapeHtml(typeof r.content === "string" ? r.content : JSON.stringify(r.content))}</div>
                 ${r.trigger_prompt ? `<div class="log-mqtt">Triggered by → ${escapeHtml(r.trigger_prompt)}</div>` : ""}
             </div>`).join("");
+    }
+
+    // ── Export helpers ──
+    function downloadFile(content, filename, mime) {
+        const blob = new Blob([content], { type: mime });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    function toCsv(rows, fields) {
+        const esc = v => {
+            if (v == null) return '';
+            const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+            return (s.includes(',') || s.includes('"') || s.includes('\n'))
+                ? '"' + s.replace(/"/g, '""') + '"'
+                : s;
+        };
+        return [fields.join(','), ...rows.map(r => fields.map(f => esc(r[f])).join(','))].join('\n');
+    }
+
+    async function exportLogs(type) {
+        const format = document.getElementById('export-format').value;
+        const endpoint = type === 'chat' ? '/admin/logs/chat' : '/admin/logs/worlds';
+        const res = await fetch(`${endpoint}?${logsParams()}`);
+        if (!res.ok) { alert('Failed to fetch logs'); return; }
+        const rows = await res.json();
+        const date = new Date().toISOString().slice(0, 10);
+        const base = `${type}_logs_${date}`;
+
+        if (format === 'json') {
+            downloadFile(JSON.stringify(rows, null, 2), `${base}.json`, 'application/json');
+        } else {
+            const fields = type === 'chat'
+                ? ['id', 'board_id', 'user_email', 'sender', 'text', 'mqtt_command', 'ts']
+                : ['id', 'board_id', 'user_email', 'role', 'content', 'scene_id', 'trigger_prompt', 'ts'];
+            downloadFile(toCsv(rows, fields), `${base}.csv`, 'text/csv;charset=utf-8;');
+        }
     }
 
     // Init
