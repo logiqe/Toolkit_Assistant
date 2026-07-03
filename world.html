@@ -392,11 +392,11 @@ async function sendMessage() {
     addMsg('ai', data.reply);
 
     if (data.scene_url) {
-      currentSceneUrl = data.scene_url;
+      currentSceneUrl = data.scene_url.replace(/^\//, '');
       injectWorld(data.world_code || '');
       if (data.world_code) {
         localStorage.setItem(WORLD_CODE_KEY, data.world_code);
-        localStorage.setItem('scene_url_latest', data.scene_url);
+        localStorage.setItem('scene_url_latest', currentSceneUrl);
       }
     } else if (data.world_code) {
       // Fallback (desktop): no scene_url
@@ -557,7 +557,7 @@ document.getElementById('worldInput').addEventListener('keypress', e => {
 
     // 3. Restaurer le monde 3D
     if (data.world_code) {
-      currentSceneUrl = `/scene/${boardId || 'none'}`;
+      currentSceneUrl = `scene/${boardId || 'none'}`;
       injectWorld(data.world_code);
     } else {
       const savedUrl = localStorage.getItem('scene_url_latest');
