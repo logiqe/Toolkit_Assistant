@@ -569,6 +569,8 @@
                 </select>
                 <button class="btn-ghost btn-sm" onclick="exportLogs('chat')">↓ Chat logs</button>
                 <button class="btn-ghost btn-sm" onclick="exportLogs('worlds')">↓ World logs</button>
+                <span style="color:var(--muted);font-size:13px;padding:0 4px;">|</span>
+                <button class="btn-ghost btn-sm" onclick="downloadDb()">↓ SQLite DB</button>
             </div>
         </div>
 
@@ -1009,6 +1011,21 @@
                 <div class="log-text">${escapeHtml(typeof r.content === "string" ? r.content : JSON.stringify(r.content))}</div>
                 ${r.trigger_prompt ? `<div class="log-mqtt">Triggered by → ${escapeHtml(r.trigger_prompt)}</div>` : ""}
             </div>`).join("");
+    }
+
+    // ── DB download ──
+    async function downloadDb() {
+        const res = await fetch('/admin/db/download');
+        if (!res.ok) { alert('DB download failed'); return; }
+        const blob = await res.blob();
+        const cd = res.headers.get('Content-Disposition') || '';
+        const match = cd.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : 'toolkit.db';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
     }
 
     // ── Export helpers ──

@@ -2,6 +2,7 @@ from fastapi import FastAPI, Query, Request, Response, Cookie, WebSocket, WebSoc
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uuid
+import tempfile
 from pydantic import BaseModel
 from datetime import datetime
 import asyncio
@@ -10,6 +11,7 @@ import os
 import sys
 import secrets
 import base64
+from starlette.background import BackgroundTask
 import httpx
 import paho.mqtt.client as mqtt
 import smtplib, random, time
@@ -18,7 +20,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, backup_db
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set() 
@@ -1086,6 +1088,22 @@ async def admin_world_logs(
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return await get_world_logs(board_id=board_id, limit=limit)
+
+
+@app.get("/admin/db/download")
+async def download_db(admin_token: str = Cookie(default=None)):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp.close()
+    await backup_db(tmp.name)
+    filename = f"toolkit_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    return FileResponse(
+        tmp.name,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        background=BackgroundTask(os.unlink, tmp.name),
+    )
 
 
 @app.post("/admin/clear-all")

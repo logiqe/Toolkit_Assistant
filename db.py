@@ -202,3 +202,18 @@ def _get_world_logs_sync(board_id, limit) -> list[dict]:
 
 async def get_world_logs(board_id: str | None = None, limit: int = 50) -> list[dict]:
     return await asyncio.to_thread(_get_world_logs_sync, board_id, limit)
+
+
+# ── Backup ────────────────────────────────────────────────────────────────────
+
+def _backup_db_sync(dest_path: str) -> None:
+    src = _connect()
+    dst = sqlite3.connect(dest_path)
+    with dst:
+        src.backup(dst)
+    dst.close()
+    src.close()
+
+
+async def backup_db(dest_path: str) -> None:
+    await asyncio.to_thread(_backup_db_sync, dest_path)
