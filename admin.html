@@ -1052,7 +1052,8 @@
     async function exportLogs(type) {
         const format = document.getElementById('export-format').value;
         const endpoint = type === 'chat' ? '/admin/logs/chat' : '/admin/logs/worlds';
-        const res = await fetch(`${endpoint}?${logsParams()}`);
+        const extra = type === 'worlds' ? '&include_html=true' : '';
+        const res = await fetch(`${endpoint}?${logsParams()}${extra}`);
         if (!res.ok) { alert('Failed to fetch logs'); return; }
         const rows = await res.json();
         const date = new Date().toISOString().slice(0, 10);
@@ -1062,8 +1063,8 @@
             downloadFile(JSON.stringify(rows, null, 2), `${base}.json`, 'application/json');
         } else {
             const fields = type === 'chat'
-                ? ['id', 'board_id', 'user_email', 'sender', 'text', 'mqtt_command', 'ts']
-                : ['id', 'board_id', 'user_email', 'role', 'content', 'scene_id', 'trigger_prompt', 'ts'];
+                ? ['id', 'board_id', 'session_id', 'user_email', 'sender', 'text', 'mqtt_command', 'ts']
+                : ['id', 'board_id', 'session_id', 'user_email', 'role', 'content', 'scene_id', 'trigger_prompt', 'scene_html', 'ts'];
             downloadFile(toCsv(rows, fields), `${base}.csv`, 'text/csv;charset=utf-8;');
         }
     }

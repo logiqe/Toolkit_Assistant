@@ -20,10 +20,23 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, backup_db
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, get_email_for_session, backup_db
 
 pending_verifications: dict[str, dict] = {}
-user_sessions: set[str] = set() 
+user_sessions: set[str] = set()
+
+# session_id → email, seeded at login, lazily restored from DB after restarts
+session_emails: dict[str, str] = {}
+
+
+async def resolve_user_email(session_id: str | None) -> str | None:
+    if not session_id:
+        return None
+    if session_id not in session_emails:
+        email = await get_email_for_session(session_id)
+        if email:
+            session_emails[session_id] = email
+    return session_emails.get(session_id)
 
 # ── World Builder import ──
 try:
@@ -452,9 +465,11 @@ async def chat_with_ai(
     session["history"].append({"sender": "ai", "text": texte_ia})
     save_logs_to_file()
 
-    await log_chat_message(board_id, session_id, "user", user_input.text)
+    user_email = await resolve_user_email(session_id)
+    await log_chat_message(board_id, session_id, "user", user_input.text, user_email=user_email)
     await log_chat_message(board_id, session_id, "ai", texte_ia,
-                           mqtt_command=json.dumps(valeurs_mqtt) if valeurs_mqtt else None)
+                           mqtt_command=json.dumps(valeurs_mqtt) if valeurs_mqtt else None,
+                           user_email=user_email)
 
     return {"reply": texte_ia, "MQTT_value": valeurs_mqtt}
 
@@ -464,7 +479,11 @@ async def chat_with_ai(
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.post("/world-chat")
-async def world_chat(user_input: UserInput, board_id: str = Query(...)):
+async def world_chat(
+    user_input: UserInput,
+    board_id: str = Query(...),
+    session_id: str = Cookie(default=None),
+):
     """
     Chat endpoint for the World Builder.
     Uses Claude (Anthropic API) to generate Three.js scenes.
@@ -507,15 +526,19 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
         world_histories[board_id] = world_histories[board_id][-40:]
 
     # Store latest scene for /scene/<board_id> — served as a real URL (no srcdoc)
+    user_email = await resolve_user_email(session_id)
     scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
         save_world_states()
-        scene_id = await log_world_scene(board_id, result["world_code"], user_input.text)
+        scene_id = await log_world_scene(board_id, result["world_code"], user_input.text,
+                                         session_id=session_id, user_email=user_email)
 
-    await log_world_message(board_id, "user", user_input.text)
-    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."), scene_id=scene_id)
+    await log_world_message(board_id, "user", user_input.text,
+                            session_id=session_id, user_email=user_email)
+    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."),
+                            scene_id=scene_id, session_id=session_id, user_email=user_email)
 
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 
@@ -530,7 +553,8 @@ async def world_chat(user_input: UserInput, board_id: str = Query(...)):
 async def world_chat_with_files(
     board_id: str = Query(...),
     text: str = Form(""),
-    files: list[UploadFile] = File(default=[])
+    files: list[UploadFile] = File(default=[]),
+    session_id: str = Cookie(default=None),
 ):
     """
     World Builder chat with file uploads.
@@ -605,14 +629,18 @@ async def world_chat_with_files(
     if len(world_histories[board_id]) > 40:
         world_histories[board_id] = world_histories[board_id][-40:]
 
+    user_email = await resolve_user_email(session_id)
     scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
-        scene_id = await log_world_scene(board_id, result["world_code"], user_text)
+        scene_id = await log_world_scene(board_id, result["world_code"], user_text,
+                                         session_id=session_id, user_email=user_email)
 
-    await log_world_message(board_id, "user", content_parts if image_parts else user_text)
-    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."), scene_id=scene_id)
+    await log_world_message(board_id, "user", content_parts if image_parts else user_text,
+                            session_id=session_id, user_email=user_email)
+    await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."),
+                            scene_id=scene_id, session_id=session_id, user_email=user_email)
 
     print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
     return {
@@ -1084,10 +1112,11 @@ async def admin_world_logs(
     admin_token: str = Cookie(default=None),
     board_id: str = Query(default=None),
     limit: int = Query(default=50),
+    include_html: bool = Query(default=False),
 ):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    return await get_world_logs(board_id=board_id, limit=limit)
+    return await get_world_logs(board_id=board_id, limit=limit, include_html=include_html)
 
 
 @app.get("/admin/db/download")
@@ -1231,11 +1260,14 @@ async def verify_code(data: CodeInput, response: Response):
     del pending_verifications[data.email]
     
     # Créer un session_id unique par utilisateur (email + board)
-    session_id = f"{data.board_id or 'unknown'}_{secrets.token_hex(8)}"
-    
+    # 'none' matches the frontend fallback used by /world-chat when no board is set
+    board_id = data.board_id or "none"
+    session_id = f"{board_id}_{secrets.token_hex(8)}"
+
     response.set_cookie("user_token", token, httponly=True, samesite="strict")
     response.set_cookie("session_id", session_id, httponly=True, samesite="strict")
 
-    await log_session_start(data.board_id, data.email, session_id)
+    session_emails[session_id] = data.email
+    await log_session_start(board_id, data.email, session_id)
 
     return {"status": "ok", "session_id": session_id}
