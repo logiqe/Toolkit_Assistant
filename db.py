@@ -267,6 +267,18 @@ async def get_world_logs(
     return await asyncio.to_thread(_get_world_logs_sync, board_id, limit, include_html)
 
 
+def _get_scene_html_sync(scene_id) -> str | None:
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT html FROM world_scenes WHERE id=?", (scene_id,)
+        ).fetchone()
+        return row[0] if row else None
+
+
+async def get_scene_html(scene_id: int) -> str | None:
+    return await asyncio.to_thread(_get_scene_html_sync, scene_id)
+
+
 def _get_email_for_session_sync(session_id) -> str | None:
     with _connect() as conn:
         row = conn.execute(

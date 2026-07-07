@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, get_email_for_session, backup_db
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set()
@@ -1117,6 +1117,16 @@ async def admin_world_logs(
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     return await get_world_logs(board_id=board_id, limit=limit, include_html=include_html)
+
+
+@app.get("/admin/scene/{scene_id}")
+async def admin_view_scene(scene_id: int, admin_token: str = Cookie(default=None)):
+    if not is_admin(admin_token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    html = await get_scene_html(scene_id)
+    if html is None:
+        return HTMLResponse("<h1>Scene not found</h1>", status_code=404)
+    return HTMLResponse(html)
 
 
 @app.get("/admin/db/download")
