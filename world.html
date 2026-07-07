@@ -28,6 +28,7 @@
       <div class="ws-dot" id="ws-dot"></div>
       <span id="ws-label">board not connected</span>
     </div>
+    <button id="logout-btn" class="logout-btn" title="Log out so the next person can sign in">⇄ Switch user</button>
   </div>
 </header>
 
@@ -95,6 +96,20 @@ const boardId = urlParams.get('board_id');
 document.getElementById('mode-mc').style.cursor = 'pointer';
 document.getElementById('mode-mc').addEventListener('click', () => {
   window.location.href = boardId ? `${document.baseURI.replace(/world.*/, '')}?board_id=${boardId}` : document.baseURI.replace(/world.*/, '');
+});
+
+// ── LOGOUT / SWITCH USER ──
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  if (!confirm('Log out and switch user?')) return;
+  try { await fetch('/user/logout', { method: 'POST' }); } catch(e) {}
+  // Clear both world and MC caches so the next participant starts clean
+  localStorage.removeItem(`world_history_${boardId}`);
+  localStorage.removeItem(`world_code_${boardId}`);
+  localStorage.removeItem('world_code_latest');
+  localStorage.removeItem('scene_url_latest');
+  localStorage.removeItem(`mc_history_${boardId}`);
+  const root = document.baseURI.replace(/world.*/, '');
+  window.location.href = boardId ? `${root}login?board_id=${boardId}` : `${root}login`;
 });
 
 // ── STATE ──

@@ -215,6 +215,20 @@ async def log_session_end(board_id: str) -> None:
     await asyncio.to_thread(_log_session_end_sync, board_id)
 
 
+def _end_session_by_id_sync(session_id) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE sessions SET ended_at = ? WHERE session_id = ? AND ended_at IS NULL",
+            (_now(), session_id),
+        )
+
+
+async def end_session_by_id(session_id: str | None) -> None:
+    if not session_id:
+        return
+    await asyncio.to_thread(_end_session_by_id_sync, session_id)
+
+
 # ── Query helpers ─────────────────────────────────────────────────────────────
 
 def _get_chat_logs_sync(board_id, limit) -> list[dict]:

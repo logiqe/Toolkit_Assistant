@@ -27,6 +27,7 @@
                 <div class="ws-dot" id="ws-dot"></div>
                 <span id="ws-label">board not connected</span>
             </div>
+            <button id="logout-btn" class="logout-btn" title="Log out so the next person can sign in">⇄ Switch user</button>
         </div>
     </header>
 
@@ -281,6 +282,23 @@
         }
 
         document.getElementById("reset-btn").addEventListener("click", doReset);
+
+        // ── LOGOUT / SWITCH USER ──
+        function clearLocalCaches() {
+            // Both MC and world caches, so the next participant starts clean
+            localStorage.removeItem(`mc_history_${boardId}`);
+            localStorage.removeItem(`world_history_${boardId}`);
+            localStorage.removeItem(`world_code_${boardId}`);
+            localStorage.removeItem('world_code_latest');
+            localStorage.removeItem('scene_url_latest');
+        }
+
+        document.getElementById("logout-btn").addEventListener("click", async () => {
+            if (!confirm("Log out and switch user?")) return;
+            try { await fetch("/user/logout", { method: "POST" }); } catch(e) {}
+            clearLocalCaches();
+            window.location.href = boardId ? `${document.baseURI}login?board_id=${boardId}` : `${document.baseURI}login`;
+        });
     </script>
 </body>
 </html>

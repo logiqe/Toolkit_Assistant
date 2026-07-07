@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, end_session_by_id, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set()
@@ -1281,3 +1281,19 @@ async def verify_code(data: CodeInput, response: Response):
     await log_session_start(board_id, data.email, session_id)
 
     return {"status": "ok", "session_id": session_id}
+
+
+@app.post("/user/logout")
+async def user_logout(
+    response: Response,
+    user_token: str = Cookie(default=None),
+    session_id: str = Cookie(default=None),
+):
+    """Log out / switch user: invalidate the token server-side, close the
+    DB session, and clear both cookies so the next participant must log in."""
+    user_sessions.discard(user_token)
+    session_emails.pop(session_id, None)
+    await end_session_by_id(session_id)
+    response.delete_cookie("user_token")
+    response.delete_cookie("session_id")
+    return {"status": "logged_out"}
