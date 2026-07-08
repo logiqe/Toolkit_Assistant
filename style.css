@@ -559,6 +559,10 @@ header {
   z-index: 10;
   display: flex;
   gap: 8px;
+  /* Wrap on narrow panels instead of pushing buttons off-canvas */
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100% - 24px);
 }
 .world-page .tool-btn {
   background: rgba(14,14,14,0.85);
@@ -575,6 +579,16 @@ header {
 }
 .world-page .tool-btn:hover  { border-color: var(--accent); color: var(--accent); }
 .world-page .tool-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+/* Enter VR — primary toolbar action, explicit colors so no browser default
+   styling (light or auto-darkened) can make it blend into the dark toolbar */
+.world-page .vr-btn {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.world-page .vr-btn:hover { background: var(--accent); color: #0e0e0e; }
 
 .world-page #world-frame {
   width: 100%; height: 100%;
