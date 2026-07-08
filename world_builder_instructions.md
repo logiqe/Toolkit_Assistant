@@ -104,6 +104,7 @@ THREE.VRButton = {
       button.style.cursor = 'auto';
       button.style.left = 'calc(50% - 75px)';
       button.style.width = '150px';
+      button.textContent = 'VR NOT SUPPORTED';
       button.onmouseenter = null;
       button.onmouseleave = null;
       button.onclick = null;
@@ -206,6 +207,20 @@ sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.radius = 4;
 scene.add(sun);
 
+// === XR SESSION BACKGROUND (passthrough-safe) ===
+renderer.xr.addEventListener('sessionstart', () => {
+  renderer.setClearColor(0x000000, 0);
+  scene.background = null;
+});
+renderer.xr.addEventListener('sessionend', () => {
+  renderer.setClearColor(0x0a0a1a, 1);
+  scene.background = window._sceneBg;
+});
+
+// === VR BUTTON — ALWAYS append it. Shows ENTER VR on headsets,
+// VR NOT SUPPORTED / WEBXR NOT AVAILABLE on regular browsers. ===
+document.body.appendChild(THREE.VRButton.createButton(renderer));
+
 // === YOUR SCENE OBJECTS HERE ===
 
 
@@ -274,6 +289,7 @@ renderer.setAnimationLoop(function() {
 16. **NEVER use `RectAreaLight`** — it silently emits NO light without `RectAreaLightUniformsLib`, which is unavailable in this sandbox. For ceiling panels, fluorescent tubes, windows, or any flat luminaire: use `emissive` + `emissiveIntensity` on the surface, plus 1–2 real `PointLight`/`SpotLight` to actually illuminate the room.
 17. **Indoor scenes need real fill light.** AmbientLight + HemisphereLight alone produce a flat, grey look. Add at least one `DirectionalLight` or 2–3 `PointLight`/`SpotLight` (respecting the ≤3 shadow-casting / ≤12 total limit) so geometry has visible relief and shadows.
 18. **Use procedural canvas textures for surface detail.** Generate `THREE.CanvasTexture` from a 2D canvas (noise, gradients, stripes, labels) and assign to `map` / `roughnessMap` / `normalMap`. This is fully self-contained and is the single biggest driver of realism. See §6.
+19. **Every scene MUST include the inline `THREE.VRButton` definition AND append it**: `document.body.appendChild(THREE.VRButton.createButton(renderer));` — without the append line the Enter VR button never appears and the scene cannot be entered on a headset.
 
 ---
 
