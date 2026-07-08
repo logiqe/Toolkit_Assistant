@@ -330,6 +330,33 @@ async def get_world_logs(
     return await asyncio.to_thread(_get_world_logs_sync, board_id, limit, include_html, conversation_id)
 
 
+def _get_latest_scene_sync(board_id, user_email, after) -> dict | None:
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        clauses, params = ["board_id=?"], [board_id]
+        if user_email:
+            clauses.append("user_email=?")
+            params.append(user_email)
+        if after:
+            clauses.append("ts>?")
+            params.append(after)
+        row = conn.execute(
+            f"SELECT id, html, ts FROM world_scenes WHERE {' AND '.join(clauses)} ORDER BY ts DESC LIMIT 1",
+            params,
+        ).fetchone()
+        return dict(row) if row else None
+
+
+async def get_latest_scene(
+    board_id: str,
+    user_email: str | None = None,
+    after: str | None = None,
+) -> dict | None:
+    """Newest stored scene for a board, optionally scoped to one user's email
+    and/or to scenes created after a timestamp (e.g. the last world-clear)."""
+    return await asyncio.to_thread(_get_latest_scene_sync, board_id, user_email, after)
+
+
 def _get_scene_html_sync(scene_id) -> str | None:
     with _connect() as conn:
         row = conn.execute(

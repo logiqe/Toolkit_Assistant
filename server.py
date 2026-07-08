@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 import uuid
 import tempfile
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import json
 import os
@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, end_session_by_id, log_conversation_start, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, end_session_by_id, log_conversation_start, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, get_latest_scene, backup_db
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set()
@@ -77,6 +77,7 @@ DATA_DIR = os.environ.get("DATA_DIR", ".")
 WORLD_STATE_FILE = os.path.join(DATA_DIR, "world_states.json")
 WORLD_SCENES_FILE = os.path.join(DATA_DIR, "world_scenes.json")
 WORLD_CONVS_FILE = os.path.join(DATA_DIR, "world_conversations.json")
+WORLD_CLEARS_FILE = os.path.join(DATA_DIR, "world_clears.json")
 LOGS_FILE = os.path.join(DATA_DIR, "test_participants_logs.json")
 ARCHIVES_FILE = os.path.join(DATA_DIR, "archives.json")
 
@@ -90,6 +91,13 @@ world_scenes: dict[str, str] = {}     # HTML with bridge injected (for serving)
 world_scenes_raw: dict[str, str] = {}  # HTML without bridge (for LLM context)
 # board_id → active conversation_id (rotated on reset/clear)
 world_conversations: dict[str, str] = {}
+# board_id → UTC ISO timestamp of the last world-clear/reset. DB scene recovery
+# never reaches behind this boundary, so a cleared world stays cleared.
+world_cleared_at: dict[str, str] = {}
+
+
+def mark_world_cleared(board_id: str) -> None:
+    world_cleared_at[board_id] = datetime.now(timezone.utc).isoformat()
 
 
 def get_world_conversation(board_id: str) -> str:
@@ -161,9 +169,11 @@ def save_world_states():
         json.dump(world_scenes_raw, f)
     with open(WORLD_CONVS_FILE, "w") as f:
         json.dump(world_conversations, f)
+    with open(WORLD_CLEARS_FILE, "w") as f:
+        json.dump(world_cleared_at, f)
 
 def load_world_states():
-    global world_histories, world_scenes, world_scenes_raw, world_conversations
+    global world_histories, world_scenes, world_scenes_raw, world_conversations, world_cleared_at
     if os.path.exists(WORLD_STATE_FILE):
         with open(WORLD_STATE_FILE, "r") as f:
             world_histories = json.load(f)
@@ -176,6 +186,9 @@ def load_world_states():
     if os.path.exists(WORLD_CONVS_FILE):
         with open(WORLD_CONVS_FILE, "r") as f:
             world_conversations = json.load(f)
+    if os.path.exists(WORLD_CLEARS_FILE):
+        with open(WORLD_CLEARS_FILE, "r") as f:
+            world_cleared_at = json.load(f)
 
 @app.on_event("startup")
 async def startup_event():
@@ -458,6 +471,9 @@ async def reset_conversation(board_id: str = Query(...)):
     # Also reset world history for this board — its conversation ends too
     world_histories.pop(board_id, None)
     world_conversations.pop(board_id, None)
+    world_scenes.pop(board_id, None)
+    world_scenes_raw.pop(board_id, None)
+    mark_world_cleared(board_id)
     save_world_states()
 
     return {"status": "success"}
@@ -845,18 +861,49 @@ window.addEventListener('message', function(e) {{
     return html + bridge
 
 
+def _restore_scene_state(board_id: str, raw_html: str) -> None:
+    """Silently repopulate the in-memory scene state from a recovered scene so
+    Enter VR and follow-up modification prompts build on what the user sees."""
+    if world_scenes_raw.get(board_id) != raw_html:
+        world_scenes_raw[board_id] = raw_html
+        world_scenes[board_id] = _inject_sensor_bridge(raw_html)
+        save_world_states()
+
+
 @app.get("/scene/{board_id}")
-async def get_scene(board_id: str, vr: str = "0"):
+async def get_scene(board_id: str, vr: str = "0", session_id: str = Cookie(default=None)):
     """
     Serve the latest generated 3D scene as a standalone HTML page.
     This is a top-level document — required for WebXR on Meta Quest.
     ?vr=1 adds a standalone WebSocket client for live sensor data.
     """
     standalone = vr == "1"
-    raw_html = world_scenes.get(board_id)
 
+    # 1. Logged-in user's latest scene for this board (DB — survives restarts
+    #    and user switches). Server state is silently restored on a hit.
+    #    Recovery never reaches behind the last world-clear.
+    raw_html = None
+    cleared_at = world_cleared_at.get(board_id)
+    user_email = await resolve_user_email(session_id)
+    if user_email:
+        db_scene = await get_latest_scene(board_id, user_email, after=cleared_at)
+        if db_scene:
+            raw_html = db_scene["html"]
+            _restore_scene_state(board_id, raw_html)
+
+    # 2. In-memory scene (anonymous access, or this user has no scene yet)
     if not raw_html:
-        # Try to reconstruct from history
+        raw_html = world_scenes_raw.get(board_id)
+
+    # 3. Board's latest scene from DB, regardless of author
+    if not raw_html:
+        db_scene = await get_latest_scene(board_id, after=cleared_at)
+        if db_scene:
+            raw_html = db_scene["html"]
+            _restore_scene_state(board_id, raw_html)
+
+    # 4. Legacy: reconstruct from history
+    if not raw_html:
         history = world_histories.get(board_id, [])
         for msg in reversed(history):
             if msg.get("role") == "assistant":
@@ -1246,7 +1293,7 @@ async def reset_assistant(admin_token: str = Cookie(default=None)):
     return {"status": "file not found"}
 
 @app.get("/world-state")
-async def get_world_state(board_id: str = Query(...)):
+async def get_world_state(board_id: str = Query(...), session_id: str = Cookie(default=None)):
     """Return the current world state (chat + latest world code) for a board."""
     history = world_histories.get(board_id, [])
     
@@ -1275,6 +1322,25 @@ async def get_world_state(board_id: str = Query(...)):
             except:
                 pass
     
+    # The history above only stores reply summaries, so the DB is the reliable
+    # source for the scene: the logged-in user's latest for this board, else
+    # the in-memory scene, else the board's latest from anyone. Recovery never
+    # reaches behind the last world-clear.
+    cleared_at = world_cleared_at.get(board_id)
+    user_email = await resolve_user_email(session_id)
+    if user_email:
+        db_scene = await get_latest_scene(board_id, user_email, after=cleared_at)
+        if db_scene:
+            latest_world_code = db_scene["html"]
+            _restore_scene_state(board_id, latest_world_code)
+    if not latest_world_code:
+        latest_world_code = world_scenes_raw.get(board_id)
+    if not latest_world_code:
+        db_scene = await get_latest_scene(board_id, after=cleared_at)
+        if db_scene:
+            latest_world_code = db_scene["html"]
+            _restore_scene_state(board_id, latest_world_code)
+
     return {
         "chat_messages": chat_messages,
         "world_code": latest_world_code
@@ -1285,6 +1351,10 @@ async def clear_world_history(board_id: str = Query(...)):
     world_histories.pop(board_id, None)
     # Conversation ends here; next message mints a fresh id
     world_conversations.pop(board_id, None)
+    # Drop the scene and set the recovery boundary so it stays cleared
+    world_scenes.pop(board_id, None)
+    world_scenes_raw.pop(board_id, None)
+    mark_world_cleared(board_id)
     save_world_states()
     return {"status": "cleared"}
 
