@@ -28,10 +28,13 @@ def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
 def _migrate(conn: sqlite3.Connection) -> None:
     for table, column in [
         ("chat_messages", "user_email"),
+        ("chat_messages", "conversation_id"),
         ("world_messages", "session_id"),
         ("world_messages", "user_email"),
+        ("world_messages", "conversation_id"),
         ("world_scenes", "session_id"),
         ("world_scenes", "user_email"),
+        ("world_scenes", "conversation_id"),
     ]:
         if not _column_exists(conn, table, column):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
@@ -69,33 +72,43 @@ def _init_db_sync() -> None:
     with _connect() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS chat_messages (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                board_id      TEXT NOT NULL,
-                session_id    TEXT,
-                user_email    TEXT,
-                sender        TEXT NOT NULL,
-                text          TEXT NOT NULL,
-                mqtt_command  TEXT,
-                ts            TEXT NOT NULL
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                board_id         TEXT NOT NULL,
+                session_id       TEXT,
+                user_email       TEXT,
+                conversation_id  TEXT,
+                sender           TEXT NOT NULL,
+                text             TEXT NOT NULL,
+                mqtt_command     TEXT,
+                ts               TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS world_scenes (
-                id             INTEGER PRIMARY KEY AUTOINCREMENT,
-                board_id       TEXT NOT NULL,
-                session_id     TEXT,
-                user_email     TEXT,
-                html           TEXT NOT NULL,
-                trigger_prompt TEXT,
-                ts             TEXT NOT NULL
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                board_id         TEXT NOT NULL,
+                session_id       TEXT,
+                user_email       TEXT,
+                conversation_id  TEXT,
+                html             TEXT NOT NULL,
+                trigger_prompt   TEXT,
+                ts               TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS world_messages (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                board_id    TEXT NOT NULL,
-                session_id  TEXT,
-                user_email  TEXT,
-                role        TEXT NOT NULL,
-                content     TEXT NOT NULL,
-                scene_id    INTEGER REFERENCES world_scenes(id),
-                ts          TEXT NOT NULL
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                board_id         TEXT NOT NULL,
+                session_id       TEXT,
+                user_email       TEXT,
+                conversation_id  TEXT,
+                role             TEXT NOT NULL,
+                content          TEXT NOT NULL,
+                scene_id         INTEGER REFERENCES world_scenes(id),
+                ts               TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS conversations (
+                conversation_id  TEXT PRIMARY KEY,
+                kind             TEXT NOT NULL,
+                board_id         TEXT,
+                started_by       TEXT,
+                started_at       TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +125,10 @@ def _init_db_sync() -> None:
             CREATE INDEX IF NOT EXISTS idx_sessions_sid      ON sessions(session_id);
         """)
         _migrate(conn)
+        # Indexes on migrated columns must come after _migrate (the column may
+        # not exist yet when upgrading an existing database)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_conv ON chat_messages(conversation_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_world_msg_conv ON world_messages(conversation_id)")
         _backfill_emails(conn)
 
 
@@ -119,13 +136,33 @@ async def init_db() -> None:
     await asyncio.to_thread(_init_db_sync)
 
 
-# ── Chat messages ─────────────────────────────────────────────────────────────
+# ── Conversations ─────────────────────────────────────────────────────────────
 
-def _log_chat_sync(board_id, session_id, sender, text, mqtt_command, user_email) -> None:
+def _log_conversation_start_sync(conversation_id, kind, board_id, started_by) -> None:
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO chat_messages (board_id, session_id, user_email, sender, text, mqtt_command, ts) VALUES (?,?,?,?,?,?,?)",
-            (board_id, session_id, user_email, sender, text, mqtt_command, _now()),
+            "INSERT OR IGNORE INTO conversations (conversation_id, kind, board_id, started_by, started_at) VALUES (?,?,?,?,?)",
+            (conversation_id, kind, board_id, started_by, _now()),
+        )
+
+
+async def log_conversation_start(
+    conversation_id: str,
+    kind: str,
+    board_id: str | None,
+    started_by: str | None = None,
+) -> None:
+    """Record conversation metadata. INSERT OR IGNORE — safe to call repeatedly."""
+    await asyncio.to_thread(_log_conversation_start_sync, conversation_id, kind, board_id, started_by)
+
+
+# ── Chat messages ─────────────────────────────────────────────────────────────
+
+def _log_chat_sync(board_id, session_id, sender, text, mqtt_command, user_email, conversation_id) -> None:
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO chat_messages (board_id, session_id, user_email, conversation_id, sender, text, mqtt_command, ts) VALUES (?,?,?,?,?,?,?,?)",
+            (board_id, session_id, user_email, conversation_id, sender, text, mqtt_command, _now()),
         )
 
 
@@ -136,17 +173,18 @@ async def log_chat_message(
     text: str,
     mqtt_command: str | None = None,
     user_email: str | None = None,
+    conversation_id: str | None = None,
 ) -> None:
-    await asyncio.to_thread(_log_chat_sync, board_id, session_id, sender, text, mqtt_command, user_email)
+    await asyncio.to_thread(_log_chat_sync, board_id, session_id, sender, text, mqtt_command, user_email, conversation_id)
 
 
 # ── World scenes ──────────────────────────────────────────────────────────────
 
-def _log_world_scene_sync(board_id, html, trigger_prompt, session_id, user_email) -> int:
+def _log_world_scene_sync(board_id, html, trigger_prompt, session_id, user_email, conversation_id) -> int:
     with _connect() as conn:
         cur = conn.execute(
-            "INSERT INTO world_scenes (board_id, session_id, user_email, html, trigger_prompt, ts) VALUES (?,?,?,?,?,?)",
-            (board_id, session_id, user_email, html, trigger_prompt, _now()),
+            "INSERT INTO world_scenes (board_id, session_id, user_email, conversation_id, html, trigger_prompt, ts) VALUES (?,?,?,?,?,?,?)",
+            (board_id, session_id, user_email, conversation_id, html, trigger_prompt, _now()),
         )
         return cur.lastrowid
 
@@ -157,19 +195,20 @@ async def log_world_scene(
     trigger_prompt: str | None = None,
     session_id: str | None = None,
     user_email: str | None = None,
+    conversation_id: str | None = None,
 ) -> int:
-    return await asyncio.to_thread(_log_world_scene_sync, board_id, html, trigger_prompt, session_id, user_email)
+    return await asyncio.to_thread(_log_world_scene_sync, board_id, html, trigger_prompt, session_id, user_email, conversation_id)
 
 
 # ── World messages ────────────────────────────────────────────────────────────
 
-def _log_world_message_sync(board_id, role, content, scene_id, session_id, user_email) -> None:
+def _log_world_message_sync(board_id, role, content, scene_id, session_id, user_email, conversation_id) -> None:
     if not isinstance(content, str):
         content = json.dumps(content)
     with _connect() as conn:
         conn.execute(
-            "INSERT INTO world_messages (board_id, session_id, user_email, role, content, scene_id, ts) VALUES (?,?,?,?,?,?,?)",
-            (board_id, session_id, user_email, role, content, scene_id, _now()),
+            "INSERT INTO world_messages (board_id, session_id, user_email, conversation_id, role, content, scene_id, ts) VALUES (?,?,?,?,?,?,?,?)",
+            (board_id, session_id, user_email, conversation_id, role, content, scene_id, _now()),
         )
 
 
@@ -180,8 +219,9 @@ async def log_world_message(
     scene_id: int | None = None,
     session_id: str | None = None,
     user_email: str | None = None,
+    conversation_id: str | None = None,
 ) -> None:
-    await asyncio.to_thread(_log_world_message_sync, board_id, role, content, scene_id, session_id, user_email)
+    await asyncio.to_thread(_log_world_message_sync, board_id, role, content, scene_id, session_id, user_email, conversation_id)
 
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -231,45 +271,53 @@ async def end_session_by_id(session_id: str | None) -> None:
 
 # ── Query helpers ─────────────────────────────────────────────────────────────
 
-def _get_chat_logs_sync(board_id, limit) -> list[dict]:
+def _get_chat_logs_sync(board_id, limit, conversation_id) -> list[dict]:
     with _connect() as conn:
         conn.row_factory = sqlite3.Row
+        clauses, params = [], []
         if board_id:
-            rows = conn.execute(
-                "SELECT * FROM chat_messages WHERE board_id=? ORDER BY ts DESC LIMIT ?",
-                (board_id, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM chat_messages ORDER BY ts DESC LIMIT ?",
-                (limit,),
-            ).fetchall()
+            clauses.append("board_id=?")
+            params.append(board_id)
+        if conversation_id:
+            clauses.append("conversation_id=?")
+            params.append(conversation_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = conn.execute(
+            f"SELECT * FROM chat_messages {where} ORDER BY ts DESC LIMIT ?",
+            (*params, limit),
+        ).fetchall()
         return [dict(r) for r in rows]
 
 
-async def get_chat_logs(board_id: str | None = None, limit: int = 50) -> list[dict]:
-    return await asyncio.to_thread(_get_chat_logs_sync, board_id, limit)
+async def get_chat_logs(
+    board_id: str | None = None,
+    limit: int = 50,
+    conversation_id: str | None = None,
+) -> list[dict]:
+    return await asyncio.to_thread(_get_chat_logs_sync, board_id, limit, conversation_id)
 
 
-def _get_world_logs_sync(board_id, limit, include_html) -> list[dict]:
+def _get_world_logs_sync(board_id, limit, include_html, conversation_id) -> list[dict]:
     with _connect() as conn:
         conn.row_factory = sqlite3.Row
         html_col = ", ws.html AS scene_html" if include_html else ""
-        q = f"""
+        clauses, params = [], []
+        if board_id:
+            clauses.append("wm.board_id=?")
+            params.append(board_id)
+        if conversation_id:
+            clauses.append("wm.conversation_id=?")
+            params.append(conversation_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = conn.execute(f"""
             SELECT wm.id, wm.board_id, wm.session_id, wm.user_email,
-                   wm.role, wm.content, wm.scene_id, wm.ts,
+                   wm.conversation_id, wm.role, wm.content, wm.scene_id, wm.ts,
                    ws.trigger_prompt{html_col}
             FROM world_messages wm
             LEFT JOIN world_scenes ws ON wm.scene_id = ws.id
-            {{where}}
+            {where}
             ORDER BY wm.ts DESC LIMIT ?
-        """
-        if board_id:
-            rows = conn.execute(
-                q.format(where="WHERE wm.board_id=?"), (board_id, limit)
-            ).fetchall()
-        else:
-            rows = conn.execute(q.format(where=""), (limit,)).fetchall()
+        """, (*params, limit)).fetchall()
         return [dict(r) for r in rows]
 
 
@@ -277,8 +325,9 @@ async def get_world_logs(
     board_id: str | None = None,
     limit: int = 50,
     include_html: bool = False,
+    conversation_id: str | None = None,
 ) -> list[dict]:
-    return await asyncio.to_thread(_get_world_logs_sync, board_id, limit, include_html)
+    return await asyncio.to_thread(_get_world_logs_sync, board_id, limit, include_html, conversation_id)
 
 
 def _get_scene_html_sync(scene_id) -> str | None:

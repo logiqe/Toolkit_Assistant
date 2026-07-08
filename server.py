@@ -20,7 +20,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from settings import settings
 from OpenAiClientAssistant import create_new_thread, GPT_response, update_assistant_model
-from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, end_session_by_id, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
+from db import init_db, log_chat_message, log_world_message, log_world_scene, log_session_start, log_session_end, end_session_by_id, log_conversation_start, get_chat_logs, get_world_logs, get_email_for_session, get_scene_html, backup_db
 
 pending_verifications: dict[str, dict] = {}
 user_sessions: set[str] = set()
@@ -37,6 +37,23 @@ async def resolve_user_email(session_id: str | None) -> str | None:
         if email:
             session_emails[session_id] = email
     return session_emails.get(session_id)
+
+
+# ── Conversations: id rotates on reset so transcripts can be reconstructed ──
+def _new_conv_id() -> str:
+    return f"conv_{secrets.token_hex(4)}"
+
+
+# conv ids already recorded in the conversations table (memo to skip
+# redundant INSERT OR IGNORE writes; repopulated lazily after restarts)
+known_conversations: set[str] = set()
+
+
+async def ensure_conversation(conv_id: str, kind: str, board_id: str | None, email: str | None) -> None:
+    if conv_id in known_conversations:
+        return
+    await log_conversation_start(conv_id, kind, board_id, email)
+    known_conversations.add(conv_id)
 
 # ── World Builder import ──
 try:
@@ -59,6 +76,7 @@ RUNTIME_CONFIG = dict(settings)
 DATA_DIR = os.environ.get("DATA_DIR", ".")
 WORLD_STATE_FILE = os.path.join(DATA_DIR, "world_states.json")
 WORLD_SCENES_FILE = os.path.join(DATA_DIR, "world_scenes.json")
+WORLD_CONVS_FILE = os.path.join(DATA_DIR, "world_conversations.json")
 LOGS_FILE = os.path.join(DATA_DIR, "test_participants_logs.json")
 ARCHIVES_FILE = os.path.join(DATA_DIR, "archives.json")
 
@@ -70,6 +88,15 @@ world_histories: dict[str, list[dict]] = {}
 # Stores the latest generated HTML scene per board_id — served via /scene/<board_id>
 world_scenes: dict[str, str] = {}     # HTML with bridge injected (for serving)
 world_scenes_raw: dict[str, str] = {}  # HTML without bridge (for LLM context)
+# board_id → active conversation_id (rotated on reset/clear)
+world_conversations: dict[str, str] = {}
+
+
+def get_world_conversation(board_id: str) -> str:
+    if board_id not in world_conversations:
+        world_conversations[board_id] = _new_conv_id()
+        save_world_states()
+    return world_conversations[board_id]
 
 # --- Render API config ---
 RENDER_API_KEY = os.environ.get("RENDER_API_KEY")
@@ -132,9 +159,11 @@ def save_world_states():
         json.dump(world_histories, f)
     with open(WORLD_SCENES_FILE, "w") as f:
         json.dump(world_scenes_raw, f)
+    with open(WORLD_CONVS_FILE, "w") as f:
+        json.dump(world_conversations, f)
 
 def load_world_states():
-    global world_histories, world_scenes, world_scenes_raw
+    global world_histories, world_scenes, world_scenes_raw, world_conversations
     if os.path.exists(WORLD_STATE_FILE):
         with open(WORLD_STATE_FILE, "r") as f:
             world_histories = json.load(f)
@@ -144,6 +173,9 @@ def load_world_states():
         # Réinjecte le bridge pour la version servie
         for board_id, raw in world_scenes_raw.items():
             world_scenes[board_id] = _inject_sensor_bridge(raw)
+    if os.path.exists(WORLD_CONVS_FILE):
+        with open(WORLD_CONVS_FILE, "r") as f:
+            world_conversations = json.load(f)
 
 @app.on_event("startup")
 async def startup_event():
@@ -159,8 +191,12 @@ def get_session(board_id: str):
             "thread_id": None,
             "last_sensor": "No data",
             "history": [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}],
-            "calibrated_sensors": {}
+            "calibrated_sensors": {},
+            "conversation_id": _new_conv_id()
         }
+    # Sessions persisted before conversation ids existed
+    if "conversation_id" not in sessions[board_id]:
+        sessions[board_id]["conversation_id"] = _new_conv_id()
     return sessions[board_id]
 
 
@@ -401,12 +437,13 @@ async def reset_conversation(board_id: str = Query(...)):
     if len(session.get("history", [])) > 1:
         archive_session(board_id, session)
 
-    await log_session_end(board_id)
+    # Note: login sessions end at /user/logout — a reset only ends the conversation
 
     session["thread_id"] = await create_new_thread()
     session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
     session["calibrated_sensors"] = {}
     session.pop("pending_hardware_update", None)
+    session["conversation_id"] = _new_conv_id()
 
     # Also reset the linked session_id session (used by /chat)
     linked = session.pop("linked_session_id", None)
@@ -416,9 +453,12 @@ async def reset_conversation(board_id: str = Query(...)):
         linked_session["history"] = [{"sender": "ai", "text": RUNTIME_CONFIG["Welcom_msg"]}]
         linked_session["calibrated_sensors"] = {}
         linked_session.pop("pending_hardware_update", None)
+        linked_session["conversation_id"] = _new_conv_id()
 
-    # Also reset world history for this board
+    # Also reset world history for this board — its conversation ends too
     world_histories.pop(board_id, None)
+    world_conversations.pop(board_id, None)
+    save_world_states()
 
     return {"status": "success"}
 
@@ -466,10 +506,13 @@ async def chat_with_ai(
     save_logs_to_file()
 
     user_email = await resolve_user_email(session_id)
-    await log_chat_message(board_id, session_id, "user", user_input.text, user_email=user_email)
+    conv_id = session["conversation_id"]
+    await ensure_conversation(conv_id, "chat", board_id, user_email)
+    await log_chat_message(board_id, session_id, "user", user_input.text,
+                           user_email=user_email, conversation_id=conv_id)
     await log_chat_message(board_id, session_id, "ai", texte_ia,
                            mqtt_command=json.dumps(valeurs_mqtt) if valeurs_mqtt else None,
-                           user_email=user_email)
+                           user_email=user_email, conversation_id=conv_id)
 
     return {"reply": texte_ia, "MQTT_value": valeurs_mqtt}
 
@@ -527,18 +570,22 @@ async def world_chat(
 
     # Store latest scene for /scene/<board_id> — served as a real URL (no srcdoc)
     user_email = await resolve_user_email(session_id)
+    conv_id = get_world_conversation(board_id)
+    await ensure_conversation(conv_id, "world", board_id, user_email)
     scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
         save_world_states()
         scene_id = await log_world_scene(board_id, result["world_code"], user_input.text,
-                                         session_id=session_id, user_email=user_email)
+                                         session_id=session_id, user_email=user_email,
+                                         conversation_id=conv_id)
 
     await log_world_message(board_id, "user", user_input.text,
-                            session_id=session_id, user_email=user_email)
+                            session_id=session_id, user_email=user_email, conversation_id=conv_id)
     await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."),
-                            scene_id=scene_id, session_id=session_id, user_email=user_email)
+                            scene_id=scene_id, session_id=session_id, user_email=user_email,
+                            conversation_id=conv_id)
 
     print(f"🌍 World generated for {board_id}: {result['reply'][:60]}...")
 
@@ -630,17 +677,21 @@ async def world_chat_with_files(
         world_histories[board_id] = world_histories[board_id][-40:]
 
     user_email = await resolve_user_email(session_id)
+    conv_id = get_world_conversation(board_id)
+    await ensure_conversation(conv_id, "world", board_id, user_email)
     scene_id = None
     if result.get("world_code"):
         world_scenes[board_id] = _inject_sensor_bridge(result["world_code"])
         world_scenes_raw[board_id] = result["world_code"]
         scene_id = await log_world_scene(board_id, result["world_code"], user_text,
-                                         session_id=session_id, user_email=user_email)
+                                         session_id=session_id, user_email=user_email,
+                                         conversation_id=conv_id)
 
     await log_world_message(board_id, "user", content_parts if image_parts else user_text,
-                            session_id=session_id, user_email=user_email)
+                            session_id=session_id, user_email=user_email, conversation_id=conv_id)
     await log_world_message(board_id, "assistant", result.get("reply", "Scene generated."),
-                            scene_id=scene_id, session_id=session_id, user_email=user_email)
+                            scene_id=scene_id, session_id=session_id, user_email=user_email,
+                            conversation_id=conv_id)
 
     print(f"🌍 World+files for {board_id}: {result['reply'][:60]}...")
     return {
@@ -1101,10 +1152,11 @@ async def admin_chat_logs(
     admin_token: str = Cookie(default=None),
     board_id: str = Query(default=None),
     limit: int = Query(default=50),
+    conversation_id: str = Query(default=None),
 ):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    return await get_chat_logs(board_id=board_id, limit=limit)
+    return await get_chat_logs(board_id=board_id, limit=limit, conversation_id=conversation_id)
 
 
 @app.get("/admin/logs/worlds")
@@ -1113,10 +1165,12 @@ async def admin_world_logs(
     board_id: str = Query(default=None),
     limit: int = Query(default=50),
     include_html: bool = Query(default=False),
+    conversation_id: str = Query(default=None),
 ):
     if not is_admin(admin_token):
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-    return await get_world_logs(board_id=board_id, limit=limit, include_html=include_html)
+    return await get_world_logs(board_id=board_id, limit=limit, include_html=include_html,
+                                conversation_id=conversation_id)
 
 
 @app.get("/admin/scene/{scene_id}")
@@ -1229,6 +1283,8 @@ async def get_world_state(board_id: str = Query(...)):
 @app.post("/world-clear")
 async def clear_world_history(board_id: str = Query(...)):
     world_histories.pop(board_id, None)
+    # Conversation ends here; next message mints a fresh id
+    world_conversations.pop(board_id, None)
     save_world_states()
     return {"status": "cleared"}
 

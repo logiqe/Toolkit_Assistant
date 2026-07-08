@@ -391,6 +391,18 @@
         .log-board { font-size: 11px; font-family: monospace; color: var(--muted); }
         .log-email { font-size: 11px; font-family: monospace; color: var(--brown); font-weight: 600; }
         .log-ts    { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+        .log-conv {
+            font-size: 10px;
+            font-family: monospace;
+            color: var(--white);
+            background: var(--muted);
+            padding: 2px 7px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .log-conv:hover { background: var(--orange); }
         .log-text  { font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 
         .log-mqtt {
@@ -559,6 +571,7 @@
                 </div>
                 <button class="btn-ghost btn-sm" onclick="loadChatLogs()">Chat logs</button>
                 <button class="btn-ghost btn-sm" onclick="loadWorldLogs()">World logs</button>
+                <span id="conv-chip" class="log-conv" style="display:none;" onclick="clearConvFilter()" title="Clear conversation filter"></span>
             </div>
             <div id="logs-list" class="sessions-list">
                 <div class="empty-state">Choose Chat logs or World logs to load</div>
@@ -967,15 +980,38 @@
 
     // ---- LOGS ----
 
+    let convFilter  = null;    // active conversation_id filter
+    let lastLogType = 'chat';  // which log list was loaded last
+
     function logsParams() {
         const boardId = document.getElementById("logs-board-id").value.trim();
         const limit   = document.getElementById("logs-limit").value;
         const qs      = new URLSearchParams({ limit });
         if (boardId) qs.set("board_id", boardId);
+        if (convFilter) qs.set("conversation_id", convFilter);
         return qs.toString();
     }
 
+    function updateConvChip() {
+        const chip = document.getElementById("conv-chip");
+        chip.style.display = convFilter ? "" : "none";
+        if (convFilter) chip.textContent = `${convFilter} ✕`;
+    }
+
+    function filterConv(convId, type) {
+        convFilter = convId;
+        updateConvChip();
+        type === 'chat' ? loadChatLogs() : loadWorldLogs();
+    }
+
+    function clearConvFilter() {
+        convFilter = null;
+        updateConvChip();
+        lastLogType === 'chat' ? loadChatLogs() : loadWorldLogs();
+    }
+
     async function loadChatLogs() {
+        lastLogType = 'chat';
         const list = document.getElementById("logs-list");
         list.innerHTML = `<div class="empty-state">Loading...</div>`;
         const res = await fetch(`/admin/logs/chat?${logsParams()}`);
@@ -988,6 +1024,7 @@
                     <span class="log-badge ${r.sender}">${r.sender}</span>
                     <span class="log-board">${escapeHtml(r.board_id)}</span>
                     ${r.user_email ? `<span class="log-email">${escapeHtml(r.user_email)}</span>` : ""}
+                    ${r.conversation_id ? `<span class="log-conv" onclick="filterConv('${r.conversation_id}', 'chat')" title="Show only this conversation">${r.conversation_id}</span>` : ""}
                     <span class="log-ts">${new Date(r.ts).toLocaleString()}</span>
                 </div>
                 <div class="log-text">${escapeHtml(r.text)}</div>
@@ -996,6 +1033,7 @@
     }
 
     async function loadWorldLogs() {
+        lastLogType = 'worlds';
         const list = document.getElementById("logs-list");
         list.innerHTML = `<div class="empty-state">Loading...</div>`;
         const res = await fetch(`/admin/logs/worlds?${logsParams()}`);
@@ -1008,6 +1046,7 @@
                     <span class="log-badge ${r.role}">${r.role}</span>
                     <span class="log-board">${escapeHtml(r.board_id)}</span>
                     ${r.user_email ? `<span class="log-email">${escapeHtml(r.user_email)}</span>` : ""}
+                    ${r.conversation_id ? `<span class="log-conv" onclick="filterConv('${r.conversation_id}', 'worlds')" title="Show only this conversation">${r.conversation_id}</span>` : ""}
                     ${r.scene_id ? `<a class="log-scene-tag" href="admin/scene/${r.scene_id}" target="_blank">scene #${r.scene_id} ↗</a>` : ""}
                     <span class="log-ts">${new Date(r.ts).toLocaleString()}</span>
                 </div>
@@ -1066,8 +1105,8 @@
             downloadFile(JSON.stringify(rows, null, 2), `${base}.json`, 'application/json');
         } else {
             const fields = type === 'chat'
-                ? ['id', 'board_id', 'session_id', 'user_email', 'sender', 'text', 'mqtt_command', 'ts']
-                : ['id', 'board_id', 'session_id', 'user_email', 'role', 'content', 'scene_id', 'trigger_prompt', 'scene_html', 'ts'];
+                ? ['id', 'board_id', 'session_id', 'user_email', 'conversation_id', 'sender', 'text', 'mqtt_command', 'ts']
+                : ['id', 'board_id', 'session_id', 'user_email', 'conversation_id', 'role', 'content', 'scene_id', 'trigger_prompt', 'scene_html', 'ts'];
             downloadFile(toCsv(rows, fields), `${base}.csv`, 'text/csv;charset=utf-8;');
         }
     }
